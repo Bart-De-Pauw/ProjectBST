@@ -137,11 +137,13 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = json.NewEncoder(w).Encode(map[string]any{
-		"playerId": p.PlayerID,
-		"username": p.Username,
-		"fullName": p.FullName,
-		"role":     p.Role,
-		"email":    p.Email,
+		"playerId":   p.PlayerID,
+		"username":   p.Username,
+		"fullName":   p.FullName,
+		"gender":     p.Gender,
+		"isActive":   p.IsActive,
+		"role":       p.Role,
+		"email":      p.Email,
 		"emailOptIn": p.EmailOptIn,
 	})
 }

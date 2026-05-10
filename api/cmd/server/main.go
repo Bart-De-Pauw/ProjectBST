@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -42,7 +41,7 @@ func main() {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 
-	r.Use(corsForDev)
+	r.Use(corsReflectOrigin)
 
 	if db == nil {
 		log.Fatalf("DATABASE_URL is required")
@@ -58,6 +57,11 @@ func main() {
 			return authHandler.RequireUser(r.Context(), r)
 		},
 	}
+	meFn := func(r *http.Request) (*store.Player, error) {
+		return authHandler.RequireUser(r.Context(), r)
+	}
+	teamsHandler := &httpapi.TeamsHandler{Store: st, Me: meFn}
+	leagueHandler := &httpapi.LeagueHandler{Store: st, Me: meFn}
 
 	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		if db != nil {
@@ -81,9 +85,53 @@ func main() {
 	r.Route("/players", func(r chi.Router) {
 		r.Get("/", playersHandler.List)
 		r.Post("/", playersHandler.Create)
+		r.Get("/{playerID}", playersHandler.Get)
+		r.Patch("/{playerID}", playersHandler.Patch)
 	})
 	r.Route("/profile", func(r chi.Router) {
 		r.Put("/", playersHandler.UpdateSelf)
+	})
+
+	r.Route("/teams", func(r chi.Router) {
+		r.Get("/", teamsHandler.List)
+		r.Post("/", teamsHandler.Create)
+		r.Get("/{teamID}", teamsHandler.Get)
+		r.Patch("/{teamID}", teamsHandler.Patch)
+	})
+
+	r.Route("/seasons", func(r chi.Router) {
+		r.Post("/", leagueHandler.CreateSeason)
+		r.Get("/", leagueHandler.ListSeasons)
+		r.Route("/{seasonID}", func(r chi.Router) {
+			r.Post("/teams", leagueHandler.AddSeasonTeam)
+			r.Get("/teams", leagueHandler.ListSeasonTeamsHTTP)
+			r.Delete("/teams/{teamID}", leagueHandler.RemoveSeasonTeam)
+			r.Post("/affiliations", leagueHandler.UpsertAffiliation)
+			r.Get("/affiliations", leagueHandler.ListSeasonAffiliationsHTTP)
+			r.Post("/events", leagueHandler.CreateSeasonEvent)
+			r.Get("/events", leagueHandler.ListSeasonEvents)
+		})
+	})
+
+	r.Route("/events", func(r chi.Router) {
+		r.Post("/{eventID}/matches", leagueHandler.CreateEventMatch)
+		r.Get("/{eventID}/matches", leagueHandler.ListEventMatches)
+		r.Post("/{eventID}/finalize", leagueHandler.FinalizeEventHTTP)
+		r.Post("/{eventID}/reopen", leagueHandler.ReopenEventHTTP)
+		r.Post("/{eventID}/send-digest", leagueHandler.SendDigestStub)
+	})
+
+	r.Route("/matches", func(r chi.Router) {
+		r.Get("/{matchID}/approvals", leagueHandler.ListMatchApprovalsHTTP)
+		r.Put("/{matchID}/roster", leagueHandler.PutMatchRoster)
+		r.Post("/{matchID}/scores", leagueHandler.PostMatchScore)
+		r.Post("/{matchID}/approve", leagueHandler.ApproveMatch)
+		r.Post("/{matchID}/approve/override", leagueHandler.OverrideApproveMatch)
+	})
+
+	r.Route("/public", func(r chi.Router) {
+		r.Get("/events/{eventID}/live", leagueHandler.LiveEvent)
+		r.Get("/seasons/{seasonID}/leaderboards", leagueHandler.PublicSeasonLeaderboards)
 	})
 
 	// Placeholder protected endpoint to prove RBAC wiring.
@@ -117,10 +165,11 @@ func envOr(key, fallback string) string {
 	return fallback
 }
 
-func corsForDev(next http.Handler) http.Handler {
+// corsReflectOrigin mirrors the request Origin for LAN/browser credentials + cookies.
+// Harden this before exposing the API on the public internet.
+func corsReflectOrigin(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		origin := r.Header.Get("Origin")
-		if origin != "" && (strings.HasPrefix(origin, "http://localhost:") || strings.HasPrefix(origin, "http://127.0.0.1:")) {
+		if origin := r.Header.Get("Origin"); origin != "" {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Vary", "Origin")
 			w.Header().Set("Access-Control-Allow-Credentials", "true")
