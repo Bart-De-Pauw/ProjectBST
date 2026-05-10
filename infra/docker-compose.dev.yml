@@ -1,0 +1,37 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: bowling
+      POSTGRES_PASSWORD: bowling
+      POSTGRES_DB: bowling
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d:ro
+
+  api:
+    build:
+      context: ../api
+    environment:
+      PORT: "8080"
+      DATABASE_URL: postgres://bowling:bowling@db:5432/bowling?sslmode=disable
+    depends_on:
+      - db
+    ports:
+      - "8080:8080"
+
+  web:
+    build:
+      context: ../web
+    depends_on:
+      - api
+    ports:
+      - "5173:5173"
+    # For now we rely on the container build context.
+    # Later we can add bind mounts for a smoother dev loop on Windows.
+
+volumes:
+  db_data:
+
