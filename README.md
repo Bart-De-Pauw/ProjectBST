@@ -32,6 +32,34 @@ Then open:
 
 The browser calls `/api/*`; Vite proxies that to the `api` container (`VITE_DEV_API_PROXY`). Local `npm run dev` defaults the proxy to `http://127.0.0.1:8080`.
 
+### Docker stack scripts (issue #9)
+
+Helper scripts wrap `docker compose` so you do not need to remember compose file paths. They fail fast if Docker is not running or the compose file is missing.
+
+**Linux / macOS / Git Bash**
+
+```bash
+chmod +x scripts/docker-stack.sh
+./scripts/docker-stack.sh help
+./scripts/docker-stack.sh dev start --build
+./scripts/docker-stack.sh dev ps
+./scripts/docker-stack.sh dev logs -f api
+./scripts/docker-stack.sh prod stop
+```
+
+**Windows (PowerShell)**
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned   # once, if scripts are blocked
+.\scripts\docker-stack.ps1 help
+.\scripts\docker-stack.ps1 dev start --build
+.\scripts\docker-stack.ps1 dev ps
+.\scripts\docker-stack.ps1 dev logs -f web
+.\scripts\docker-stack.ps1 prod stop
+```
+
+Stacks: `dev` → `infra/docker-compose.dev.yml`, `prod` → `infra/docker-compose.yml`. Commands: `start [--build]`, `stop`, `ps`, `logs` (pass through any `docker compose logs` flags, e.g. `-f`, `--tail=100`, service names). Override DB credentials the same way as plain `docker compose` (environment / `.env`), not via committed secrets.
+
 After first DB init, a default **President** account exists (from migration `0002_seed_president.sql`):
 
 - Username: `president`
