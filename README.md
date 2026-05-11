@@ -45,7 +45,8 @@ Change this password immediately in any real deployment.
 - Auth: `POST /auth/login`, `POST /auth/logout`, `GET /auth/me`
 - Players: `GET|POST /players`, `GET|PATCH /players/{id}`, `PUT /profile`
 - Teams: `GET|POST /teams`, `GET|PATCH /teams/{id}`
-- Seasons & schedule: `POST|GET /seasons`, `POST|DELETE /seasons/{id}/teams/{teamId}`, `POST /seasons/{id}/affiliations`, `POST|GET /seasons/{id}/events`
+- Seasons & schedule: `POST|GET /seasons`, `GET|PATCH /seasons/{id}` (PATCH is President-only), `GET /seasons/{id}/teams|affiliations|events` (read: any signed-in user), `POST|DELETE /seasons/{id}/teams/{teamId}`, `POST /seasons/{id}/affiliations`, `POST /seasons/{id}/events`
+- Teams/players directory (read): `GET /teams`, `GET /players` (any signed-in user; create/update remains President-only)
 - Matches: `POST|GET /events/{eventId}/matches`, `PUT /matches/{matchId}/roster`, `POST /matches/{matchId}/scores`, `POST /matches/{matchId}/approve`, `POST /matches/{matchId}/approve/override`
 - Finalize: `POST /events/{eventId}/finalize`, `POST /events/{eventId}/reopen`
 - Public: `GET /public/events/{eventId}/live`, `GET /public/seasons/{seasonId}/leaderboards?mode=official|live`
