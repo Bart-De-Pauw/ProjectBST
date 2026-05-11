@@ -64,7 +64,7 @@ export function SeasonDetailPage() {
     setAffiliations(jsonArray<AffiliationRow>(await aRes.json()));
     setEvents(jsonArray<EventRow>(await eRes.json()));
     setErr(null);
-  }, [seasonId, validId]);
+  }, [auth, seasonId, validId]);
 
   useEffect(() => {
     if (auth.status === "authenticated" && validId) void load();

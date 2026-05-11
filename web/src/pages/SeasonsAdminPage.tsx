@@ -140,6 +140,11 @@ function CreateSeasonDialog({
   const [name, setName] = useState("");
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
+  const [dialogErr, setDialogErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (open) setDialogErr(null);
+  }, [open]);
 
   async function submit() {
     const body = {
@@ -148,12 +153,17 @@ function CreateSeasonDialog({
       endDate: end.trim() === "" ? null : end.trim(),
     };
     const res = await apiFetch("/seasons", { method: "POST", body: JSON.stringify(body) });
-    if (!res.ok) return;
+    if (!res.ok) {
+      const t = await res.text();
+      setDialogErr(t || `Create failed (${res.status}).`);
+      return;
+    }
     onCreated();
     onClose();
     setName("");
     setStart("");
     setEnd("");
+    setDialogErr(null);
   }
 
   return (
@@ -161,6 +171,7 @@ function CreateSeasonDialog({
       <DialogTitle>New season</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
+          {dialogErr ? <Alert severity="error">{dialogErr}</Alert> : null}
           <TextField label="Season name" value={name} onChange={(e) => setName(e.target.value)} required />
           <TextField label="Start date (optional)" type="date" value={start} onChange={(e) => setStart(e.target.value)} InputLabelProps={{ shrink: true }} />
           <TextField label="End date (optional)" type="date" value={end} onChange={(e) => setEnd(e.target.value)} InputLabelProps={{ shrink: true }} />
@@ -188,12 +199,14 @@ function EditSeasonDialog({
   const [name, setName] = useState("");
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
+  const [dialogErr, setDialogErr] = useState<string | null>(null);
 
   useEffect(() => {
     if (!season) return;
     setName(season.seasonName);
     setStart(season.startDate ? String(season.startDate).slice(0, 10) : "");
     setEnd(season.endDate ? String(season.endDate).slice(0, 10) : "");
+    setDialogErr(null);
   }, [season]);
 
   async function submit() {
@@ -204,9 +217,14 @@ function EditSeasonDialog({
       endDate: end.trim() === "" ? null : end.trim(),
     };
     const res = await apiFetch(`/seasons/${season.seasonId}`, { method: "PATCH", body: JSON.stringify(body) });
-    if (!res.ok) return;
+    if (!res.ok) {
+      const t = await res.text();
+      setDialogErr(t || `Save failed (${res.status}).`);
+      return;
+    }
     onSaved();
     onClose();
+    setDialogErr(null);
   }
 
   return (
@@ -214,6 +232,7 @@ function EditSeasonDialog({
       <DialogTitle>Edit season</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
+          {dialogErr ? <Alert severity="error">{dialogErr}</Alert> : null}
           <TextField label="Season name" value={name} onChange={(e) => setName(e.target.value)} required />
           <TextField label="Start date (optional)" type="date" value={start} onChange={(e) => setStart(e.target.value)} InputLabelProps={{ shrink: true }} />
           <TextField label="End date (optional)" type="date" value={end} onChange={(e) => setEnd(e.target.value)} InputLabelProps={{ shrink: true }} />
