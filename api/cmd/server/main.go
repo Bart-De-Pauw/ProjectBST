@@ -103,6 +103,8 @@ func main() {
 		r.Post("/", leagueHandler.CreateSeason)
 		r.Get("/", leagueHandler.ListSeasons)
 		r.Route("/{seasonID}", func(r chi.Router) {
+			r.Get("/", leagueHandler.GetSeasonHTTP)
+			r.Patch("/", leagueHandler.PatchSeasonHTTP)
 			r.Post("/teams", leagueHandler.AddSeasonTeam)
 			r.Get("/teams", leagueHandler.ListSeasonTeamsHTTP)
 			r.Delete("/teams/{teamID}", leagueHandler.RemoveSeasonTeam)

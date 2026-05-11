@@ -46,11 +46,12 @@ export function SeasonDetailPage() {
 
   const load = useCallback(async () => {
     if (!validId) return;
+    const isPresident = auth.status === "authenticated" && auth.me.role === "President";
     const [stRes, tRes, pRes, aRes, eRes] = await Promise.all([
       apiFetch(`/seasons/${seasonId}/teams`),
       apiFetch("/teams"),
       apiFetch("/players"),
-      apiFetch(`/seasons/${seasonId}/affiliations`),
+      isPresident ? apiFetch(`/seasons/${seasonId}/affiliations`) : Promise.resolve(new Response("[]", { status: 200 })),
       apiFetch(`/seasons/${seasonId}/events`),
     ]);
     if (!stRes.ok || !tRes.ok || !pRes.ok || !aRes.ok || !eRes.ok) {
@@ -66,7 +67,7 @@ export function SeasonDetailPage() {
   }, [seasonId, validId]);
 
   useEffect(() => {
-    if (auth.status === "authenticated" && auth.me.role === "President" && validId) void load();
+    if (auth.status === "authenticated" && validId) void load();
   }, [auth, load, validId]);
 
   const enrolledIds = useMemo(() => new Set(seasonTeams.map((r) => r.teamId)), [seasonTeams]);
@@ -94,13 +95,14 @@ export function SeasonDetailPage() {
   }
 
   if (auth.status === "loading") return <Typography sx={{ p: 2 }}>Loading…</Typography>;
-  if (auth.status !== "authenticated" || auth.me.role !== "President") {
+  if (auth.status !== "authenticated") {
     return (
       <Alert sx={{ m: 2 }}>
-        President access required. <Link to="/login">Sign in</Link>.
+        Sign-in required. <Link to="/login">Sign in</Link>.
       </Alert>
     );
   }
+  const isPresident = auth.me.role === "President";
   if (!validId) {
     return (
       <Alert sx={{ m: 2 }}>
@@ -129,7 +131,11 @@ export function SeasonDetailPage() {
       {err ? <Alert severity="error">{err}</Alert> : null}
 
       <Typography variant="h6">Teams in season</Typography>
-      <AddSeasonTeamPicker teams={teamsToAdd} onAdd={(id) => void addTeamToSeason(id)} />
+      {!isPresident ? (
+        <Alert severity="info">View-only access. Only the President can edit season enrollment, affiliations, and events.</Alert>
+      ) : (
+        <AddSeasonTeamPicker teams={teamsToAdd} onAdd={(id) => void addTeamToSeason(id)} />
+      )}
       <Table size="small">
         <TableHead>
           <TableRow>
@@ -144,9 +150,11 @@ export function SeasonDetailPage() {
               <TableCell>{teamName(r.teamId)}</TableCell>
               <TableCell align="right">{r.seasonPoints}</TableCell>
               <TableCell>
-                <Button size="small" color="warning" onClick={() => void removeTeamFromSeason(r.teamId)}>
-                  Remove
-                </Button>
+                {isPresident ? (
+                  <Button size="small" color="warning" onClick={() => void removeTeamFromSeason(r.teamId)}>
+                    Remove
+                  </Button>
+                ) : null}
               </TableCell>
             </TableRow>
           ))}
@@ -155,9 +163,11 @@ export function SeasonDetailPage() {
 
       <Stack direction="row" justifyContent="space-between" alignItems="center">
         <Typography variant="h6">Player affiliations</Typography>
-        <Button variant="outlined" size="small" onClick={() => setAffOpen(true)}>
-          Add / update affiliation
-        </Button>
+        {isPresident ? (
+          <Button variant="outlined" size="small" onClick={() => setAffOpen(true)}>
+            Add / update affiliation
+          </Button>
+        ) : null}
       </Stack>
       <Table size="small">
         <TableHead>
@@ -180,9 +190,11 @@ export function SeasonDetailPage() {
 
       <Stack direction="row" justifyContent="space-between" alignItems="center">
         <Typography variant="h6">Events</Typography>
-        <Button variant="contained" size="small" onClick={() => setEventOpen(true)}>
-          New event
-        </Button>
+        {isPresident ? (
+          <Button variant="contained" size="small" onClick={() => setEventOpen(true)}>
+            New event
+          </Button>
+        ) : null}
       </Stack>
       <Table size="small">
         <TableHead>
@@ -209,15 +221,17 @@ export function SeasonDetailPage() {
 
       <CreateEventDialog seasonId={seasonId} open={eventOpen} onClose={() => setEventOpen(false)} onCreated={() => void load()} />
 
-      <UpsertAffiliationDialog
-        seasonId={seasonId}
-        seasonTeams={seasonTeams}
-        players={players}
-        teamName={teamName}
-        open={affOpen}
-        onClose={() => setAffOpen(false)}
-        onSaved={() => void load()}
-      />
+      {isPresident ? (
+        <UpsertAffiliationDialog
+          seasonId={seasonId}
+          seasonTeams={seasonTeams}
+          players={players}
+          teamName={teamName}
+          open={affOpen}
+          onClose={() => setAffOpen(false)}
+          onSaved={() => void load()}
+        />
+      ) : null}
 
       <Typography variant="body2">
         <Link to="/">Home</Link>

@@ -19,9 +19,8 @@ type PlayersHandler struct {
 }
 
 func (h *PlayersHandler) List(w http.ResponseWriter, r *http.Request) {
-	p, err := h.Me(r)
-	if err != nil || p.Role != "President" {
-		http.Error(w, "forbidden", http.StatusForbidden)
+	if _, err := h.Me(r); err != nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
 	players, err := h.Store.ListPlayers(r.Context())
@@ -123,9 +122,8 @@ func (h *PlayersHandler) UpdateSelf(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *PlayersHandler) Get(w http.ResponseWriter, r *http.Request) {
-	pres, err := h.Me(r)
-	if err != nil || pres.Role != "President" {
-		http.Error(w, "forbidden", http.StatusForbidden)
+	if _, err := h.Me(r); err != nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
 	id, err := strconv.ParseInt(chi.URLParam(r, "playerID"), 10, 64)

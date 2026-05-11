@@ -70,6 +70,24 @@ func (s *Store) GetSeason(ctx context.Context, id int64) (*Season, error) {
 	return out, nil
 }
 
+func (s *Store) UpdateSeason(ctx context.Context, id int64, name string, start, end *time.Time) (*Season, error) {
+	const q = `
+		UPDATE season_competition
+		SET season_name=$2, start_date=$3, end_date=$4, updated_at=now()
+		WHERE season_id=$1
+		RETURNING season_id, season_name, start_date, end_date
+	`
+	out := &Season{}
+	err := s.DB.QueryRow(ctx, q, id, name, start, end).Scan(&out.SeasonID, &out.SeasonName, &out.StartDate, &out.EndDate)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return out, nil
+}
+
 func (s *Store) AddSeasonTeam(ctx context.Context, seasonID, teamID int64) error {
 	tx, err := s.DB.Begin(ctx)
 	if err != nil {

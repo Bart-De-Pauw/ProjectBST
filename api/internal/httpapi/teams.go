@@ -18,9 +18,8 @@ type TeamsHandler struct {
 }
 
 func (h *TeamsHandler) List(w http.ResponseWriter, r *http.Request) {
-	p, err := h.Me(r)
-	if err != nil || p.Role != "President" {
-		http.Error(w, "forbidden", http.StatusForbidden)
+	if _, err := h.Me(r); err != nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
 	teams, err := h.Store.ListTeams(r.Context())
@@ -69,9 +68,8 @@ func (h *TeamsHandler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *TeamsHandler) Get(w http.ResponseWriter, r *http.Request) {
-	p, err := h.Me(r)
-	if err != nil || p.Role != "President" {
-		http.Error(w, "forbidden", http.StatusForbidden)
+	if _, err := h.Me(r); err != nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
 	id, err := strconv.ParseInt(chi.URLParam(r, "teamID"), 10, 64)

@@ -56,7 +56,7 @@ function Home() {
   const auth = useAuth();
   return (
     <div style={{ padding: 16 }}>
-      <h1>Bowling Competition Manager</h1>
+      <h1>Bowling Competition Manager ISSUE 1</h1>
       <Typography variant="body2" sx={{ mb: 2 }}>
         {auth.status === "authenticated"
           ? `Signed in as ${auth.me.username} (${auth.me.role})`

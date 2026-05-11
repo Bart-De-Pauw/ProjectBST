@@ -19,6 +19,15 @@ type LeagueHandler struct {
 	Me    func(r *http.Request) (*store.Player, error)
 }
 
+func (h *LeagueHandler) requireUser(w http.ResponseWriter, r *http.Request) (*store.Player, bool) {
+	p, err := h.Me(r)
+	if err != nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return nil, false
+	}
+	return p, true
+}
+
 func (h *LeagueHandler) requirePresident(w http.ResponseWriter, r *http.Request) (*store.Player, bool) {
 	p, err := h.Me(r)
 	if err != nil || p.Role != "President" {
@@ -79,7 +88,7 @@ func (h *LeagueHandler) CreateSeason(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *LeagueHandler) ListSeasons(w http.ResponseWriter, r *http.Request) {
-	if _, ok := h.requirePresident(w, r); !ok {
+	if _, ok := h.requireUser(w, r); !ok {
 		return
 	}
 	list, err := h.Store.ListSeasons(r.Context())
@@ -88,6 +97,74 @@ func (h *LeagueHandler) ListSeasons(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = json.NewEncoder(w).Encode(list)
+}
+
+func (h *LeagueHandler) GetSeasonHTTP(w http.ResponseWriter, r *http.Request) {
+	if _, ok := h.requireUser(w, r); !ok {
+		return
+	}
+	sid, err := strconv.ParseInt(chi.URLParam(r, "seasonID"), 10, 64)
+	if err != nil || sid < 1 {
+		http.Error(w, "invalid season id", http.StatusBadRequest)
+		return
+	}
+	se, err := h.Store.GetSeason(r.Context(), sid)
+	if errors.Is(err, store.ErrNotFound) {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+	_ = json.NewEncoder(w).Encode(se)
+}
+
+type patchSeasonReq struct {
+	SeasonName string  `json:"seasonName"`
+	StartDate  *string `json:"startDate"`
+	EndDate    *string `json:"endDate"`
+}
+
+func (h *LeagueHandler) PatchSeasonHTTP(w http.ResponseWriter, r *http.Request) {
+	if _, ok := h.requirePresident(w, r); !ok {
+		return
+	}
+	sid, err := strconv.ParseInt(chi.URLParam(r, "seasonID"), 10, 64)
+	if err != nil || sid < 1 {
+		http.Error(w, "invalid season id", http.StatusBadRequest)
+		return
+	}
+	var req patchSeasonReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	req.SeasonName = strings.TrimSpace(req.SeasonName)
+	if req.SeasonName == "" {
+		http.Error(w, "seasonName required", http.StatusBadRequest)
+		return
+	}
+	sd, err := parseOptDate(req.StartDate)
+	if err != nil {
+		http.Error(w, "invalid startDate", http.StatusBadRequest)
+		return
+	}
+	ed, err := parseOptDate(req.EndDate)
+	if err != nil {
+		http.Error(w, "invalid endDate", http.StatusBadRequest)
+		return
+	}
+	se, err := h.Store.UpdateSeason(r.Context(), sid, req.SeasonName, sd, ed)
+	if errors.Is(err, store.ErrNotFound) {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, "update failed", http.StatusBadRequest)
+		return
+	}
+	_ = json.NewEncoder(w).Encode(se)
 }
 
 func (h *LeagueHandler) AddSeasonTeam(w http.ResponseWriter, r *http.Request) {
@@ -216,7 +293,7 @@ func (h *LeagueHandler) CreateSeasonEvent(w http.ResponseWriter, r *http.Request
 }
 
 func (h *LeagueHandler) ListSeasonEvents(w http.ResponseWriter, r *http.Request) {
-	if _, ok := h.requirePresident(w, r); !ok {
+	if _, ok := h.requireUser(w, r); !ok {
 		return
 	}
 	sid, err := strconv.ParseInt(chi.URLParam(r, "seasonID"), 10, 64)
@@ -233,7 +310,7 @@ func (h *LeagueHandler) ListSeasonEvents(w http.ResponseWriter, r *http.Request)
 }
 
 func (h *LeagueHandler) ListSeasonTeamsHTTP(w http.ResponseWriter, r *http.Request) {
-	if _, ok := h.requirePresident(w, r); !ok {
+	if _, ok := h.requireUser(w, r); !ok {
 		return
 	}
 	sid, err := strconv.ParseInt(chi.URLParam(r, "seasonID"), 10, 64)
@@ -257,7 +334,7 @@ func (h *LeagueHandler) ListSeasonTeamsHTTP(w http.ResponseWriter, r *http.Reque
 }
 
 func (h *LeagueHandler) ListSeasonAffiliationsHTTP(w http.ResponseWriter, r *http.Request) {
-	if _, ok := h.requirePresident(w, r); !ok {
+	if _, ok := h.requireUser(w, r); !ok {
 		return
 	}
 	sid, err := strconv.ParseInt(chi.URLParam(r, "seasonID"), 10, 64)
