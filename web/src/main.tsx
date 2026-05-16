@@ -13,6 +13,7 @@ import { SeasonsAdminPage } from "./pages/SeasonsAdminPage";
 import { SeasonDetailPage } from "./pages/SeasonDetailPage";
 import { EventAdminPage } from "./pages/EventAdminPage";
 import { LeaderboardsPage } from "./pages/LeaderboardsPage";
+import { LiveEventPage } from "./pages/LiveEventPage";
 
 const theme = createTheme({ palette: { mode: "dark" } });
 const queryClient = new QueryClient();
@@ -70,6 +71,11 @@ function Home() {
         </li>
         <li>
           <Link to="/login">Sign in</Link>
+        </li>
+        <li>
+          <Typography variant="body2" color="text.secondary" component="span">
+            Live event: use <code>/events/&#123;eventId&#125;/live</code> (no login)
+          </Typography>
         </li>
         <li>
           <Link to="/profile">Profile / email</Link>
@@ -131,6 +137,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
                   <Route path="/admin/seasons" element={<SeasonsAdminPage />} />
                   <Route path="/admin/seasons/:seasonId" element={<SeasonDetailPage />} />
                   <Route path="/admin/events/:eventId" element={<EventAdminPage />} />
+                  <Route path="/events/:eventId/live" element={<LiveEventPage />} />
                   <Route path="/seasons/:seasonId/leaderboards" element={<LeaderboardsPage />} />
                 </Route>
               </Routes>

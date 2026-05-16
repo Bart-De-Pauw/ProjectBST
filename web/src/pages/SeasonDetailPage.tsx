@@ -237,9 +237,16 @@ export function SeasonDetailPage() {
                 <TableCell>{matchCounts[e.eventId] ?? "—"}</TableCell>
                 <TableCell>{e.finalized ? "Finalized" : "Open"}</TableCell>
                 <TableCell>
-                  <Button size="small" component={Link} to={`/admin/events/${e.eventId}`} onClick={(ev) => ev.stopPropagation()}>
-                    {isPresident ? "Schedule matches" : isCaptain ? "Roster & scores" : "View"}
-                  </Button>
+                  <Stack direction="row" spacing={1} flexWrap="wrap">
+                    <Button size="small" component={Link} to={`/events/${e.eventId}/live`} onClick={(ev) => ev.stopPropagation()}>
+                      Live view
+                    </Button>
+                    {auth.status === "authenticated" ? (
+                      <Button size="small" component={Link} to={`/admin/events/${e.eventId}`} onClick={(ev) => ev.stopPropagation()}>
+                        {isPresident ? "Manage" : isCaptain ? "Roster & scores" : "View"}
+                      </Button>
+                    ) : null}
+                  </Stack>
                 </TableCell>
               </TableRow>
             ))

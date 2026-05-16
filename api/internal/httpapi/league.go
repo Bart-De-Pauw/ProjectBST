@@ -3,6 +3,7 @@ package httpapi
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -830,11 +831,13 @@ func (h *LeagueHandler) LiveEvent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	type liveMatch struct {
-		Match      store.Match              `json:"match"`
-		Totals     scoring.MatchTotals      `json:"totals"`
-		Roster     []store.RosterRow        `json:"roster"`
+		Match      store.Match                `json:"match"`
+		TeamAName  string                     `json:"teamAName"`
+		TeamBName  string                     `json:"teamBName"`
+		Totals     scoring.MatchTotals        `json:"totals"`
+		Roster     []store.RosterRow          `json:"roster"`
 		Scores     []store.MatchPlayerGameRow `json:"scores"`
-		Finalized  bool                     `json:"eventFinalized"`
+		Finalized  bool                       `json:"eventFinalized"`
 	}
 
 	out := map[string]any{
@@ -852,8 +855,18 @@ func (h *LeagueHandler) LiveEvent(w http.ResponseWriter, r *http.Request) {
 		scores, _ := h.Store.ListMatchPlayerGames(r.Context(), m.MatchID)
 		ms := store.BuildMatchScoresPartialFromRows(m.TeamAID, m.TeamBID, roster, scores)
 		tot := scoring.ScoreMatch(ms)
+		teamAName := fmt.Sprintf("Team #%d", m.TeamAID)
+		teamBName := fmt.Sprintf("Team #%d", m.TeamBID)
+		if t, err := h.Store.GetTeam(r.Context(), m.TeamAID); err == nil {
+			teamAName = t.TeamName
+		}
+		if t, err := h.Store.GetTeam(r.Context(), m.TeamBID); err == nil {
+			teamBName = t.TeamName
+		}
 		list = append(list, liveMatch{
 			Match:     m,
+			TeamAName: teamAName,
+			TeamBName: teamBName,
 			Totals:    tot,
 			Roster:    roster,
 			Scores:    scores,

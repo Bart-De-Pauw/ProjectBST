@@ -41,6 +41,9 @@ function buildCrumbs(pathname: string): Crumb[] {
   m = pathname.match(/^\/seasons\/(\d+)\/leaderboards$/);
   if (m) return [...crumbs, { label: "Season" }, { label: `#${m[1]}` }, { label: "Leaderboards" }];
 
+  m = pathname.match(/^\/events\/(\d+)\/live$/);
+  if (m) return [...crumbs, { label: "Live event" }, { label: `#${m[1]}` }];
+
   return [...crumbs, { label: pathname }];
 }
 
@@ -90,6 +93,9 @@ export function AppLayout() {
         <List dense>
           <NavItem to="/" label="Home" collapsed={collapsed} />
           <NavItem to="/health" label="API health" collapsed={collapsed} />
+          <Typography variant="caption" sx={{ px: 2, py: 1, opacity: 0.7 }} display={collapsed ? "none" : "block"}>
+            Public live: /events/:id/live
+          </Typography>
           <NavItem to="/profile" label="Profile" collapsed={collapsed} />
           <NavItem to="/login" label="Sign in" collapsed={collapsed} />
           <Divider sx={{ my: 1 }} />

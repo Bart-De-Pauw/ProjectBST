@@ -20,7 +20,7 @@ import {
 } from "@mui/material";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { apiErrorText, apiFetch, apiUrl, jsonArray } from "../api/client";
+import { apiErrorText, apiFetch, jsonArray } from "../api/client";
 import type { Role } from "../auth/AuthContext";
 import { useAuth } from "../auth/AuthContext";
 
@@ -281,9 +281,7 @@ export function EventAdminPage() {
           <>
             <Link to={`/admin/seasons/${seasonId}`}>Back to season</Link>
             {" · "}
-            <a href={apiUrl(`/public/events/${eventId}/live`)} target="_blank" rel="noreferrer">
-              Public live JSON
-            </a>
+            <Link to={`/events/${eventId}/live`}>Public live view</Link>
           </>
         ) : (
           <>Set roster slots 1–3 and enter scratch scores for your team.</>
