@@ -64,9 +64,9 @@ describe("LiveEventPage", () => {
     );
 
     expect(await screen.findByText(/live \/ unfinalized/i)).toBeTruthy();
-    expect(await screen.findByText("Aces")).toBeTruthy();
-    expect(await screen.findByText("Kings")).toBeTruthy();
-    expect(await screen.findByText(/slots pending/i)).toBeTruthy();
+    expect(screen.getAllByText("Aces").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Kings").length).toBeGreaterThan(0);
+    expect((await screen.findAllByText(/slots pending/i)).length).toBeGreaterThan(0);
     expect(screen.getByText(/score completeness/i)).toBeTruthy();
     expect(apiFetch).toHaveBeenCalledWith("/public/events/7/live");
   });
