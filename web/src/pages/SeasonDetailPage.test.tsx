@@ -56,6 +56,7 @@ describe("SeasonDetailPage schedule", () => {
     expect(await screen.findByText("2026-05-01")).toBeTruthy();
     expect(await screen.findByText("1")).toBeTruthy();
     expect(screen.getByRole("button", { name: /new event/i })).toBeTruthy();
-    expect(screen.getByRole("link", { name: /schedule matches/i })).toBeTruthy();
+    expect(screen.getByRole("link", { name: /live view/i })).toBeTruthy();
+    expect(screen.getByRole("link", { name: /manage/i })).toBeTruthy();
   });
 });
