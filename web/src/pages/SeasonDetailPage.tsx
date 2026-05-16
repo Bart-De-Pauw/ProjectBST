@@ -19,7 +19,7 @@ import {
 } from "@mui/material";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { apiFetch, jsonArray } from "../api/client";
+import { apiErrorText, apiFetch, jsonArray } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 
 type TeamRef = { teamId: number; teamName: string };
@@ -40,6 +40,7 @@ export function SeasonDetailPage() {
   const [players, setPlayers] = useState<PlayerRow[]>([]);
   const [affiliations, setAffiliations] = useState<AffiliationRow[]>([]);
   const [events, setEvents] = useState<EventRow[]>([]);
+  const [matchCounts, setMatchCounts] = useState<Record<number, number>>({});
   const [err, setErr] = useState<string | null>(null);
   const [eventOpen, setEventOpen] = useState(false);
   const [affOpen, setAffOpen] = useState(false);
@@ -62,7 +63,16 @@ export function SeasonDetailPage() {
     setAllTeams(jsonArray<TeamRef>(await tRes.json()));
     setPlayers(jsonArray<PlayerRow>(await pRes.json()));
     setAffiliations(jsonArray<AffiliationRow>(await aRes.json()));
-    setEvents(jsonArray<EventRow>(await eRes.json()));
+    const evs = jsonArray<EventRow>(await eRes.json());
+    setEvents(evs);
+    const counts: Record<number, number> = {};
+    await Promise.all(
+      evs.map(async (e) => {
+        const mRes = await apiFetch(`/events/${e.eventId}/matches`);
+        counts[e.eventId] = mRes.ok ? jsonArray(await mRes.json()).length : 0;
+      }),
+    );
+    setMatchCounts(counts);
     setErr(null);
   }, [auth, seasonId, validId]);
 
@@ -103,6 +113,7 @@ export function SeasonDetailPage() {
     );
   }
   const isPresident = auth.me.role === "President";
+  const isCaptain = auth.me.role === "Captain";
   if (!validId) {
     return (
       <Alert sx={{ m: 2 }}>
@@ -189,37 +200,63 @@ export function SeasonDetailPage() {
       </Table>
 
       <Stack direction="row" justifyContent="space-between" alignItems="center">
-        <Typography variant="h6">Events</Typography>
+        <Typography variant="h6">Schedule (events)</Typography>
         {isPresident ? (
           <Button variant="contained" size="small" onClick={() => setEventOpen(true)}>
             New event
           </Button>
         ) : null}
       </Stack>
+      {isPresident ? (
+        <Typography variant="body2" color="text.secondary">
+          Create an evening, then open it to add lane matchups. Each team can play at most once per event.
+        </Typography>
+      ) : null}
       <Table size="small">
         <TableHead>
           <TableRow>
             <TableCell>Date</TableCell>
+            <TableCell>Matches</TableCell>
             <TableCell>Status</TableCell>
             <TableCell />
           </TableRow>
         </TableHead>
         <TableBody>
-          {events.map((e) => (
-            <TableRow key={e.eventId} hover sx={{ cursor: "pointer" }} onClick={() => nav(`/admin/events/${e.eventId}`)}>
-              <TableCell>{fmtDay(e.eventDate)}</TableCell>
-              <TableCell>{e.finalized ? "Finalized" : "Open"}</TableCell>
-              <TableCell>
-                <Button size="small" component={Link} to={`/admin/events/${e.eventId}`}>
-                  Manage
-                </Button>
+          {events.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={4}>
+                <Typography variant="body2" color="text.secondary">
+                  No events scheduled yet.
+                </Typography>
               </TableCell>
             </TableRow>
-          ))}
+          ) : (
+            events.map((e) => (
+              <TableRow key={e.eventId} hover sx={{ cursor: "pointer" }} onClick={() => nav(`/admin/events/${e.eventId}`)}>
+                <TableCell>{fmtDay(e.eventDate)}</TableCell>
+                <TableCell>{matchCounts[e.eventId] ?? "—"}</TableCell>
+                <TableCell>{e.finalized ? "Finalized" : "Open"}</TableCell>
+                <TableCell>
+                  <Button size="small" component={Link} to={`/admin/events/${e.eventId}`} onClick={(ev) => ev.stopPropagation()}>
+                    {isPresident ? "Schedule matches" : isCaptain ? "Roster & scores" : "View"}
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))
+          )}
         </TableBody>
       </Table>
 
-      <CreateEventDialog seasonId={seasonId} open={eventOpen} onClose={() => setEventOpen(false)} onCreated={() => void load()} />
+      <CreateEventDialog
+        seasonId={seasonId}
+        open={eventOpen}
+        onClose={() => setEventOpen(false)}
+        onCreated={(eventId) => {
+          void load();
+          nav(`/admin/events/${eventId}`);
+        }}
+        onError={setErr}
+      />
 
       {isPresident ? (
         <UpsertAffiliationDialog
@@ -278,30 +315,45 @@ function CreateEventDialog({
   open,
   onClose,
   onCreated,
+  onError,
 }: {
   seasonId: number;
   open: boolean;
   onClose: () => void;
-  onCreated: () => void;
+  onCreated: (eventId: number) => void;
+  onError: (msg: string | null) => void;
 }) {
   const [day, setDay] = useState("");
+  const [localErr, setLocalErr] = useState<string | null>(null);
 
   async function submit() {
+    setLocalErr(null);
+    onError(null);
     const res = await apiFetch(`/seasons/${seasonId}/events`, {
       method: "POST",
       body: JSON.stringify({ eventDate: day }),
     });
-    if (!res.ok) return;
-    onCreated();
+    if (!res.ok) {
+      const msg = await apiErrorText(res);
+      setLocalErr(msg);
+      onError(msg);
+      return;
+    }
+    const ev = (await res.json()) as { eventId: number };
+    onCreated(ev.eventId);
     onClose();
     setDay("");
+    setLocalErr(null);
   }
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs">
       <DialogTitle>New event</DialogTitle>
       <DialogContent>
-        <TextField label="Event date" type="date" fullWidth sx={{ mt: 1 }} value={day} onChange={(e) => setDay(e.target.value)} InputLabelProps={{ shrink: true }} />
+        <Stack spacing={2} sx={{ mt: 1 }}>
+          <TextField label="Event date" type="date" fullWidth value={day} onChange={(e) => setDay(e.target.value)} InputLabelProps={{ shrink: true }} />
+          {localErr ? <Alert severity="error">{localErr}</Alert> : null}
+        </Stack>
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Cancel</Button>

@@ -31,9 +31,11 @@ services:
       - api
     ports:
       - "5173:5173"
-    # For now we rely on the container build context.
-    # Later we can add bind mounts for a smoother dev loop on Windows.
+    volumes:
+      - ../web:/app
+      - web_node_modules:/app/node_modules
 
 volumes:
   db_data:
+  web_node_modules:
 

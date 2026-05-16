@@ -20,7 +20,7 @@ import {
 } from "@mui/material";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { apiFetch, apiUrl, jsonArray } from "../api/client";
+import { apiErrorText, apiFetch, apiUrl, jsonArray } from "../api/client";
 import type { Role } from "../auth/AuthContext";
 import { useAuth } from "../auth/AuthContext";
 
@@ -92,6 +92,23 @@ function usedTeamIDsForEvent(matches: LiveMatchBlock[]): Set<number> {
   return s;
 }
 
+function editableTeamIdsForMatch(
+  isPresident: boolean,
+  captainTeamIds: Set<number>,
+  teamAId: number,
+  teamBId: number,
+): Set<number> {
+  const s = new Set<number>();
+  if (isPresident) {
+    s.add(teamAId);
+    s.add(teamBId);
+  } else {
+    if (captainTeamIds.has(teamAId)) s.add(teamAId);
+    if (captainTeamIds.has(teamBId)) s.add(teamBId);
+  }
+  return s;
+}
+
 export function EventAdminPage() {
   const auth = useAuth();
   const { eventId: eidParam } = useParams<{ eventId: string }>();
@@ -139,18 +156,21 @@ export function EventAdminPage() {
     setErr(null);
 
     const apprMap: Record<number, ApprovalRow[]> = {};
-    await Promise.all(
-      matches.map(async (b) => {
-        const ar = await apiFetch(`/matches/${b.match.matchId}/approvals`);
-        if (ar.ok) apprMap[b.match.matchId] = jsonArray<ApprovalRow>(await ar.json());
-      }),
-    );
+    const role = auth.status === "authenticated" ? auth.me.role : null;
+    if (role === "President") {
+      await Promise.all(
+        matches.map(async (b) => {
+          const ar = await apiFetch(`/matches/${b.match.matchId}/approvals`);
+          if (ar.ok) apprMap[b.match.matchId] = jsonArray<ApprovalRow>(await ar.json());
+        }),
+      );
+    }
     setApprovals(apprMap);
     setReloadIx((x) => x + 1);
-  }, [eventId, validId]);
+  }, [auth, eventId, validId]);
 
   useEffect(() => {
-    if (auth.status === "authenticated" && auth.me.role === "President" && validId) void reloadAll();
+    if (auth.status === "authenticated" && validId) void reloadAll();
   }, [auth, reloadAll, validId]);
 
   const teamName = useCallback(
@@ -164,6 +184,28 @@ export function EventAdminPage() {
       return players.filter((p) => ids.has(p.playerId));
     },
     [affiliations, players],
+  );
+
+  const isPresident = auth.status === "authenticated" && auth.me.role === "President";
+  const captainTeamIds = useMemo(() => {
+    if (auth.status !== "authenticated") return new Set<number>();
+    return new Set(
+      affiliations.filter((a) => a.playerId === auth.me.playerId && a.isCaptain).map((a) => a.teamId),
+    );
+  }, [affiliations, auth]);
+
+  const visibleMatches = useMemo(() => {
+    if (!live) return [];
+    if (isPresident) return live.matches;
+    return live.matches.filter(
+      (b) => captainTeamIds.has(b.match.teamAId) || captainTeamIds.has(b.match.teamBId),
+    );
+  }, [live, isPresident, captainTeamIds]);
+
+  const usedTeams = useMemo(() => usedTeamIDsForEvent(live?.matches ?? []), [live?.matches]);
+  const availableTeamCount = useMemo(
+    () => seasonTeams.filter((st) => !usedTeams.has(st.teamId)).length,
+    [seasonTeams, usedTeams],
   );
 
   async function finalizeEvent() {
@@ -200,11 +242,20 @@ export function EventAdminPage() {
   }
 
   if (auth.status === "loading") return <Typography sx={{ p: 2 }}>Loading…</Typography>;
-  if (auth.status !== "authenticated" || auth.me.role !== "President") {
+  if (auth.status !== "authenticated") {
     return (
       <Alert sx={{ m: 2 }}>
-        President access required for this screen. Captains can enter scores via API; UI flows coming later.
-        <Link to="/login"> Sign in</Link>.
+        Sign-in required. <Link to="/login">Sign in</Link>
+      </Alert>
+    );
+  }
+  const canAccessByRole = auth.me.role === "President" || auth.me.role === "Captain";
+  const canAccessByAffiliation = captainTeamIds.size > 0;
+  if (!canAccessByRole && !canAccessByAffiliation) {
+    if (!live) return <Typography sx={{ p: 2 }}>Loading…</Typography>;
+    return (
+      <Alert sx={{ m: 2 }}>
+        Only the President or a team captain (season affiliation) can manage match rosters on this screen.
       </Alert>
     );
   }
@@ -218,20 +269,25 @@ export function EventAdminPage() {
 
   const finalized = live?.finalized ?? false;
   const seasonId = live?.seasonId ?? 0;
-  const usedTeams = useMemo(() => usedTeamIDsForEvent(live?.matches ?? []), [live?.matches]);
 
   return (
     <Stack spacing={2} sx={{ p: 2 }}>
       <Typography variant="h5">
-        Event #{eventId}
+        {isPresident ? "Event" : "Match roster & scores"} #{eventId}
         {live ? ` · ${String(live.eventDate).slice(0, 10)}` : null}
       </Typography>
       <Typography variant="body2">
-        <Link to={`/admin/seasons/${seasonId}`}>Back to season</Link>
-        {" · "}
-        <a href={apiUrl(`/public/events/${eventId}/live`)} target="_blank" rel="noreferrer">
-          Public live JSON
-        </a>
+        {isPresident ? (
+          <>
+            <Link to={`/admin/seasons/${seasonId}`}>Back to season</Link>
+            {" · "}
+            <a href={apiUrl(`/public/events/${eventId}/live`)} target="_blank" rel="noreferrer">
+              Public live JSON
+            </a>
+          </>
+        ) : (
+          <>Set roster slots 1–3 and enter scratch scores for your team.</>
+        )}
       </Typography>
       {err ? <Alert severity="error">{err}</Alert> : null}
       {digestMsg ? (
@@ -242,31 +298,90 @@ export function EventAdminPage() {
         </Alert>
       ) : null}
 
-      <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center">
-        <Typography variant="body2">{finalized ? "Finalized" : "Open for edits"}</Typography>
-        {!finalized ? (
-          <Button variant="contained" color="success" onClick={() => void finalizeEvent()}>
-            Finalize event
+      {isPresident ? (
+        <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center">
+          <Typography variant="body2">{finalized ? "Finalized" : "Open for edits"}</Typography>
+          {!finalized ? (
+            <Button variant="contained" color="success" onClick={() => void finalizeEvent()}>
+              Finalize event
+            </Button>
+          ) : (
+            <>
+              <Button variant="outlined" color="warning" onClick={() => setReopenOpen(true)}>
+                Reopen event
+              </Button>
+              <Button variant="outlined" onClick={() => void sendDigestStub()}>
+                Send digest (stub)
+              </Button>
+            </>
+          )}
+          <Button variant="outlined" onClick={() => setMatchOpen(true)} disabled={finalized || availableTeamCount === 0}>
+            Add match
           </Button>
-        ) : (
-          <>
-            <Button variant="outlined" color="warning" onClick={() => setReopenOpen(true)}>
-              Reopen event
-            </Button>
-            <Button variant="outlined" onClick={() => void sendDigestStub()}>
-              Send digest (stub)
-            </Button>
-          </>
-        )}
-        <Button variant="outlined" onClick={() => setMatchOpen(true)} disabled={finalized}>
-          Add match
-        </Button>
-      </Stack>
+        </Stack>
+      ) : (
+        <Typography variant="body2">
+          {finalized ? "Event finalized — roster and scores locked." : "Open for roster and score edits."}
+        </Typography>
+      )}
 
       {!live ? (
         <Typography sx={{ p: 2 }}>Loading event…</Typography>
+      ) : visibleMatches.length === 0 ? (
+        <Alert severity="info">No matches on this event for teams you captain.</Alert>
       ) : (
-        live.matches.map((block, i) => (
+        <>
+          {isPresident ? (
+            <>
+          <Typography variant="h6">Evening schedule</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+            {live.matches.length === 0
+              ? "No matches yet — add lane matchups below."
+              : `${live.matches.length} match${live.matches.length === 1 ? "" : "es"} scheduled.`}
+            {availableTeamCount === 0 && seasonTeams.length > 0 && !finalized ? " All enrolled teams are already on the schedule." : null}
+          </Typography>
+          <Table size="small" sx={{ mb: 2 }}>
+            <TableHead>
+              <TableRow>
+                <TableCell>Lane</TableCell>
+                <TableCell>Team A</TableCell>
+                <TableCell />
+                <TableCell>Team B</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {live.matches.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={4}>
+                    <Typography variant="body2" color="text.secondary">
+                      Use &quot;Add match&quot; to schedule teams for this evening.
+                    </Typography>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                live.matches.map((block) => (
+                  <TableRow key={block.match.matchId}>
+                    <TableCell>{block.match.laneNumber}</TableCell>
+                    <TableCell>{teamName(block.match.teamAId)}</TableCell>
+                    <TableCell align="center">vs</TableCell>
+                    <TableCell>{teamName(block.match.teamBId)}</TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+            </>
+          ) : null}
+
+          <Typography variant="h6">{isPresident ? "Match details" : "Your matches"}</Typography>
+          {visibleMatches.map((block, i) => {
+            const matchEditableTeamIds = editableTeamIdsForMatch(
+              isPresident,
+              captainTeamIds,
+              block.match.teamAId,
+              block.match.teamBId,
+            );
+            return (
           <MatchAccordion
             key={block.match.matchId}
             defaultExpanded={i === 0}
@@ -277,22 +392,31 @@ export function EventAdminPage() {
             playersForTeam={playersForTeam}
             disabled={finalized}
             userRole={auth.me.role}
+            editableTeamIds={matchEditableTeamIds}
+            canEditScores={isPresident || matchEditableTeamIds.size > 0}
             onReload={() => void reloadAll()}
+            onError={setErr}
           />
-        ))
+            );
+          })}
+        </>
       )}
 
-      <CreateMatchDialog
-        open={matchOpen}
-        onClose={() => setMatchOpen(false)}
-        eventId={eventId}
-        seasonTeams={seasonTeams}
-        usedTeamIDs={usedTeams}
-        teamName={teamName}
-        disabled={finalized}
-        onCreated={() => void reloadAll()}
-      />
+      {isPresident ? (
+        <CreateMatchDialog
+          open={matchOpen}
+          onClose={() => setMatchOpen(false)}
+          eventId={eventId}
+          seasonTeams={seasonTeams}
+          usedTeamIDs={usedTeams}
+          teamName={teamName}
+          disabled={finalized}
+          onCreated={() => void reloadAll()}
+          onError={setErr}
+        />
+      ) : null}
 
+      {isPresident ? (
       <Dialog open={reopenOpen} onClose={() => setReopenOpen(false)} fullWidth maxWidth="sm">
         <DialogTitle>Reopen event</DialogTitle>
         <DialogContent>
@@ -305,6 +429,7 @@ export function EventAdminPage() {
           </Button>
         </DialogActions>
       </Dialog>
+      ) : null}
 
       <Typography variant="body2">
         <Link to="/">Home</Link>
@@ -328,7 +453,10 @@ function MatchAccordion({
   playersForTeam,
   disabled,
   userRole,
+  editableTeamIds,
+  canEditScores,
   onReload,
+  onError,
 }: {
   defaultExpanded: boolean;
   block: LiveMatchBlock;
@@ -338,7 +466,10 @@ function MatchAccordion({
   playersForTeam: (teamId: number) => PlayerRow[];
   disabled: boolean;
   userRole: Role;
+  editableTeamIds: Set<number>;
+  canEditScores: boolean;
   onReload: () => void;
+  onError: (msg: string | null) => void;
 }) {
   const { match: m, totals } = block;
   const [rosterPick, setRosterPick] = useState<Record<string, string>>({}); // key: `${teamId}-${slot}` => playerId
@@ -365,10 +496,11 @@ function MatchAccordion({
     setScratchPick(sp);
   }, [block.match.matchId, reloadIx, block.roster, block.scores]);
 
-  async function saveRosterAndScores() {
-    // 1) roster upsert
+  async function saveRoster() {
+    onError(null);
     const rosterBody: Array<{ teamId: number; playerId: number; slotPosition: number }> = [];
     for (const tid of [m.teamAId, m.teamBId]) {
+      if (!editableTeamIds.has(tid)) continue;
       for (const slot of [1, 2, 3] as const) {
         const pidStr = rosterPick[`${tid}-${slot}`];
         const pid = pidStr ? Number(pidStr) : 0;
@@ -379,10 +511,36 @@ function MatchAccordion({
       method: "PUT",
       body: JSON.stringify(rosterBody),
     });
-    if (!rr.ok) return;
+    if (!rr.ok) {
+      onError(await apiErrorText(rr));
+      return;
+    }
+    onReload();
+  }
 
-    // 2) scores upsert (scratch only; hdcp comes from per-slot input and is applied to all games)
+  async function saveRosterAndScores() {
+    onError(null);
+    const rosterBody: Array<{ teamId: number; playerId: number; slotPosition: number }> = [];
     for (const tid of [m.teamAId, m.teamBId]) {
+      if (!editableTeamIds.has(tid)) continue;
+      for (const slot of [1, 2, 3] as const) {
+        const pidStr = rosterPick[`${tid}-${slot}`];
+        const pid = pidStr ? Number(pidStr) : 0;
+        if (pid > 0) rosterBody.push({ teamId: tid, playerId: pid, slotPosition: slot });
+      }
+    }
+    const rr = await apiFetch(`/matches/${m.matchId}/roster`, {
+      method: "PUT",
+      body: JSON.stringify(rosterBody),
+    });
+    if (!rr.ok) {
+      onError(await apiErrorText(rr));
+      return;
+    }
+
+    // scores upsert (scratch only; hdcp comes from per-slot input and is applied to all games)
+    for (const tid of [m.teamAId, m.teamBId]) {
+      if (!editableTeamIds.has(tid)) continue;
       for (const slot of [1, 2, 3] as const) {
         const pidStr = rosterPick[`${tid}-${slot}`];
         const playerId = pidStr ? Number(pidStr) : 0;
@@ -409,7 +567,10 @@ function MatchAccordion({
               hdcpAtEvent,
             }),
           });
-          if (!res.ok) return;
+          if (!res.ok) {
+            onError(await apiErrorText(res));
+            return;
+          }
         }
       }
     }
@@ -462,18 +623,20 @@ function MatchAccordion({
       </AccordionSummary>
       <AccordionDetails>
         <Stack spacing={2}>
-          <Typography variant="subtitle2">Completeness</Typography>
-          <Typography variant="caption" component="div">
-            {(totals.gameBreakdowns ?? []).map((g, i) => (
-              <span key={i}>
-                G{i + 1}: slots {g.slotsPending ? "pending" : "ok"}, team {g.teamPending ? "pending" : "ok"}
-                {i < 2 ? " · " : ""}
-              </span>
-            ))}
-          </Typography>
+          {userRole === "President" ? (
+            <>
+              <Typography variant="subtitle2">Completeness</Typography>
+              <Typography variant="caption" component="div">
+                {(totals.gameBreakdowns ?? []).map((g, i) => (
+                  <span key={i}>
+                    G{i + 1}: slots {g.slotsPending ? "pending" : "ok"}, team {g.teamPending ? "pending" : "ok"}
+                    {i < 2 ? " · " : ""}
+                  </span>
+                ))}
+              </Typography>
 
-          <Typography variant="subtitle2">Approvals</Typography>
-          <Stack direction="row" spacing={2} flexWrap="wrap">
+              <Typography variant="subtitle2">Approvals</Typography>
+              <Stack direction="row" spacing={2} flexWrap="wrap">
             {[m.teamAId, m.teamBId].map((tid) => {
               const row = apprByTeam.get(tid);
               const ok = row ? approvalEffective(row) : false;
@@ -491,27 +654,34 @@ function MatchAccordion({
               );
             })}
           </Stack>
+            </>
+          ) : null}
 
-          <Typography variant="subtitle2">Roster + scores</Typography>
+          <Typography variant="subtitle2">{canEditScores ? "Roster + scores" : "Roster (slots 1–3)"}</Typography>
           <Table size="small">
             <TableHead>
               <TableRow>
                 <TableCell>Team</TableCell>
                 <TableCell>Slot#</TableCell>
                 <TableCell sx={{ minWidth: 220 }}>Player</TableCell>
-                <TableCell>Hdcp</TableCell>
-                <TableCell>G1</TableCell>
-                <TableCell>G2</TableCell>
-                <TableCell>G3</TableCell>
-                <TableCell>G1+hdcp</TableCell>
-                <TableCell>G2+hdcp</TableCell>
-                <TableCell>G3+hdcp</TableCell>
-                <TableCell>Total</TableCell>
+                {canEditScores ? (
+                  <>
+                    <TableCell>Hdcp</TableCell>
+                    <TableCell>G1</TableCell>
+                    <TableCell>G2</TableCell>
+                    <TableCell>G3</TableCell>
+                    <TableCell>G1+hdcp</TableCell>
+                    <TableCell>G2+hdcp</TableCell>
+                    <TableCell>G3+hdcp</TableCell>
+                    <TableCell>Total</TableCell>
+                  </>
+                ) : null}
               </TableRow>
             </TableHead>
             <TableBody>
               {[m.teamAId, m.teamBId].flatMap((tid) =>
                 ([1, 2, 3] as const).map((slot) => {
+                  const canEditTeam = editableTeamIds.has(tid);
                   const pid = rosterPick[`${tid}-${slot}`] ?? "";
                   const hdStr = hdcpPick[`${tid}-${slot}`] ?? "";
                   const hd = Number(String(hdStr).trim());
@@ -524,63 +694,73 @@ function MatchAccordion({
                   const g3h = g3 == null ? null : g3 + hdcp;
                   const total = (g1h ?? 0) + (g2h ?? 0) + (g3h ?? 0);
                   const showTotal = g1 == null && g2 == null && g3 == null ? "—" : String(total);
+                  const playerName =
+                    pid && playersForTeam(tid).find((p) => String(p.playerId) === pid)?.fullName;
 
                   return (
                     <TableRow key={`rs-${tid}-${slot}`}>
                       <TableCell>{teamName(tid)}</TableCell>
                       <TableCell>{slot}</TableCell>
                       <TableCell>
-                        <TextField
-                          select
-                          fullWidth
-                          size="small"
-                          disabled={disabled}
-                          value={pid}
-                          onChange={(e) =>
-                            setRosterPick((prev) => ({ ...prev, [`${tid}-${slot}`]: e.target.value }))
-                          }
-                        >
-                          <MenuItem value="">
-                            <em>—</em>
-                          </MenuItem>
-                          {availablePlayersForSlot(tid, slot).map((p) => (
-                            <MenuItem key={p.playerId} value={String(p.playerId)}>
-                              {p.fullName}
-                            </MenuItem>
-                          ))}
-                        </TextField>
-                      </TableCell>
-                      <TableCell>
-                        <TextField
-                          size="small"
-                          disabled={disabled}
-                          value={hdStr}
-                          onChange={(e) =>
-                            setHdcpPick((prev) => ({ ...prev, [`${tid}-${slot}`]: e.target.value }))
-                          }
-                          sx={{ width: 80 }}
-                        />
-                      </TableCell>
-                      {([1, 2, 3] as const).map((game) => (
-                        <TableCell key={game}>
+                        {canEditTeam ? (
                           <TextField
+                            select
+                            fullWidth
                             size="small"
                             disabled={disabled}
-                            value={scratchPick[`${tid}-${slot}-${game}`] ?? ""}
+                            value={pid}
                             onChange={(e) =>
-                              setScratchPick((prev) => ({
-                                ...prev,
-                                [`${tid}-${slot}-${game}`]: e.target.value,
-                              }))
+                              setRosterPick((prev) => ({ ...prev, [`${tid}-${slot}`]: e.target.value }))
                             }
-                            sx={{ width: 70 }}
-                          />
-                        </TableCell>
-                      ))}
-                      <TableCell>{g1h == null ? "—" : g1h}</TableCell>
-                      <TableCell>{g2h == null ? "—" : g2h}</TableCell>
-                      <TableCell>{g3h == null ? "—" : g3h}</TableCell>
-                      <TableCell>{showTotal}</TableCell>
+                          >
+                            <MenuItem value="">
+                              <em>—</em>
+                            </MenuItem>
+                            {availablePlayersForSlot(tid, slot).map((p) => (
+                              <MenuItem key={p.playerId} value={String(p.playerId)}>
+                                {p.fullName}
+                              </MenuItem>
+                            ))}
+                          </TextField>
+                        ) : (
+                          <Typography variant="body2">{playerName ?? "—"}</Typography>
+                        )}
+                      </TableCell>
+                      {canEditScores ? (
+                        <>
+                          <TableCell>
+                            <TextField
+                              size="small"
+                              disabled={disabled || !canEditTeam}
+                              value={hdStr}
+                              onChange={(e) =>
+                                setHdcpPick((prev) => ({ ...prev, [`${tid}-${slot}`]: e.target.value }))
+                              }
+                              sx={{ width: 80 }}
+                            />
+                          </TableCell>
+                          {([1, 2, 3] as const).map((game) => (
+                            <TableCell key={game}>
+                              <TextField
+                                size="small"
+                                disabled={disabled || !canEditTeam}
+                                value={scratchPick[`${tid}-${slot}-${game}`] ?? ""}
+                                onChange={(e) =>
+                                  setScratchPick((prev) => ({
+                                    ...prev,
+                                    [`${tid}-${slot}-${game}`]: e.target.value,
+                                  }))
+                                }
+                                sx={{ width: 70 }}
+                              />
+                            </TableCell>
+                          ))}
+                          <TableCell>{g1h == null ? "—" : g1h}</TableCell>
+                          <TableCell>{g2h == null ? "—" : g2h}</TableCell>
+                          <TableCell>{g3h == null ? "—" : g3h}</TableCell>
+                          <TableCell>{showTotal}</TableCell>
+                        </>
+                      ) : null}
                     </TableRow>
                   );
                 }),
@@ -588,12 +768,21 @@ function MatchAccordion({
             </TableBody>
           </Table>
           <Typography variant="caption" color="text.secondary">
-            Enter scratch only for G1–G3. Hdcp is applied to each game for totals and is saved with each submitted score.
-            You can assign players to slots here; roster is saved automatically when you click Save.
+            {canEditScores
+              ? userRole === "President"
+                ? "Enter scratch only for G1–G3. Hdcp is applied to each game for totals and is saved with each submitted score."
+                : "Enter roster and scratch scores for your team (G1–G3). Hdcp applies to all three games. Opponent rows are read-only."
+              : "Choose one player per slot for your team. Opponent roster is shown read-only."}
           </Typography>
-          <Button variant="contained" disabled={disabled} onClick={() => void saveRosterAndScores()}>
-            Save roster + scores
-          </Button>
+          {canEditScores ? (
+            <Button variant="contained" disabled={disabled} onClick={() => void saveRosterAndScores()}>
+              Save roster + scores
+            </Button>
+          ) : (
+            <Button variant="contained" disabled={disabled} onClick={() => void saveRoster()}>
+              Save roster
+            </Button>
+          )}
 
           <Dialog open={overrideOpen != null} onClose={() => setOverrideOpen(null)}>
             <DialogTitle>President override approval</DialogTitle>
@@ -628,6 +817,7 @@ function CreateMatchDialog({
   teamName,
   disabled,
   onCreated,
+  onError,
 }: {
   open: boolean;
   onClose: () => void;
@@ -637,16 +827,21 @@ function CreateMatchDialog({
   teamName: (id: number) => string;
   disabled: boolean;
   onCreated: () => void;
+  onError: (msg: string | null) => void;
 }) {
   const [lane, setLane] = useState("");
   const [a, setA] = useState("");
   const [b, setB] = useState("");
+  const [localErr, setLocalErr] = useState<string | null>(null);
   const availableTeams = useMemo(
     () => seasonTeams.map((st) => st.teamId).filter((id) => !usedTeamIDs.has(id)),
     [seasonTeams, usedTeamIDs],
   );
+  const canSubmit = !disabled && lane.trim() !== "" && a !== "" && b !== "" && a !== b && availableTeams.length >= 2;
 
   async function submit() {
+    setLocalErr(null);
+    onError(null);
     const teamAId = Number(a);
     const teamBId = Number(b);
     if (!lane.trim() || teamAId < 1 || teamBId < 1 || teamAId === teamBId) return;
@@ -654,12 +849,18 @@ function CreateMatchDialog({
       method: "POST",
       body: JSON.stringify({ laneNumber: lane.trim(), teamAId, teamBId }),
     });
-    if (!res.ok) return;
+    if (!res.ok) {
+      const msg = await apiErrorText(res);
+      setLocalErr(msg);
+      onError(msg);
+      return;
+    }
     onCreated();
     onClose();
     setLane("");
     setA("");
     setB("");
+    setLocalErr(null);
   }
 
   return (
@@ -667,8 +868,11 @@ function CreateMatchDialog({
       <DialogTitle>New match</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
-          <TextField label="Lane label" value={lane} onChange={(e) => setLane(e.target.value)} disabled={disabled} />
-          <TextField select label="Team A" value={a} onChange={(e) => setA(e.target.value)} disabled={disabled}>
+          {availableTeams.length < 2 ? (
+            <Alert severity="info">All enrolled teams are already scheduled for this event.</Alert>
+          ) : null}
+          <TextField label="Lane label" value={lane} onChange={(e) => setLane(e.target.value)} disabled={disabled || availableTeams.length < 2} />
+          <TextField select label="Team A" value={a} onChange={(e) => setA(e.target.value)} disabled={disabled || availableTeams.length < 2}>
             <MenuItem value="">
               <em>Choose…</em>
             </MenuItem>
@@ -678,7 +882,7 @@ function CreateMatchDialog({
               </MenuItem>
             ))}
           </TextField>
-          <TextField select label="Team B" value={b} onChange={(e) => setB(e.target.value)} disabled={disabled}>
+          <TextField select label="Team B" value={b} onChange={(e) => setB(e.target.value)} disabled={disabled || availableTeams.length < 2}>
             <MenuItem value="">
               <em>Choose…</em>
             </MenuItem>
@@ -693,11 +897,12 @@ function CreateMatchDialog({
           <Typography variant="caption" color="text.secondary">
             Only teams not yet scheduled for this event are listed.
           </Typography>
+          {localErr ? <Alert severity="error">{localErr}</Alert> : null}
         </Stack>
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Cancel</Button>
-        <Button variant="contained" onClick={() => void submit()} disabled={disabled}>
+        <Button variant="contained" onClick={() => void submit()} disabled={!canSubmit}>
           Create
         </Button>
       </DialogActions>

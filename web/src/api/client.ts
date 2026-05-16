@@ -25,3 +25,9 @@ export async function apiFetch(path: string, init?: RequestInit): Promise<Respon
 export function jsonArray<T>(raw: unknown): T[] {
   return Array.isArray(raw) ? (raw as T[]) : [];
 }
+
+/** Plain-text error body from failed API responses. */
+export async function apiErrorText(res: Response): Promise<string> {
+  const t = (await res.text()).trim();
+  return t || res.statusText || "Request failed";
+}

@@ -67,6 +67,32 @@ func (s *Store) GetMatch(ctx context.Context, matchID int64) (*Match, error) {
 	return m, nil
 }
 
+func (s *Store) TeamScheduledInEvent(ctx context.Context, eventID, teamID int64) (bool, error) {
+	const q = `SELECT 1 FROM match WHERE event_id=$1 AND (team_a_id=$2 OR team_b_id=$2) LIMIT 1`
+	var one int
+	err := s.DB.QueryRow(ctx, q, eventID, teamID).Scan(&one)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func (s *Store) IsTeamEnrolledInSeason(ctx context.Context, seasonID, teamID int64) (bool, error) {
+	const q = `SELECT 1 FROM season_team WHERE season_id=$1 AND team_id=$2 LIMIT 1`
+	var one int
+	err := s.DB.QueryRow(ctx, q, seasonID, teamID).Scan(&one)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 func (s *Store) GetEventIDForMatch(ctx context.Context, matchID int64) (int64, error) {
 	const q = `SELECT event_id FROM match WHERE match_id=$1`
 	var eid int64

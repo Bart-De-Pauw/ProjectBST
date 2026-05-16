@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"projectbst/api/internal/scoring"
 	"projectbst/api/internal/store"
@@ -285,6 +286,11 @@ func (h *LeagueHandler) CreateSeasonEvent(w http.ResponseWriter, r *http.Request
 	}
 	ev, err := h.Store.CreateEvent(r.Context(), sid, d)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			http.Error(w, "event date already exists for this season", http.StatusConflict)
+			return
+		}
 		http.Error(w, "create failed", http.StatusBadRequest)
 		return
 	}
@@ -392,8 +398,33 @@ func (h *LeagueHandler) CreateEventMatch(w http.ResponseWriter, r *http.Request)
 		http.Error(w, "event finalized", http.StatusBadRequest)
 		return
 	}
+	for _, tid := range []int64{body.TeamAID, body.TeamBID} {
+		ok, err := h.Store.IsTeamEnrolledInSeason(r.Context(), ev.SeasonID, tid)
+		if err != nil {
+			http.Error(w, "server error", http.StatusInternalServerError)
+			return
+		}
+		if !ok {
+			http.Error(w, "team not enrolled in season", http.StatusBadRequest)
+			return
+		}
+		scheduled, err := h.Store.TeamScheduledInEvent(r.Context(), eid, tid)
+		if err != nil {
+			http.Error(w, "server error", http.StatusInternalServerError)
+			return
+		}
+		if scheduled {
+			http.Error(w, "team already scheduled for this event", http.StatusConflict)
+			return
+		}
+	}
 	m, err := h.Store.CreateMatch(r.Context(), eid, body.LaneNumber, body.TeamAID, body.TeamBID)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			http.Error(w, "team already scheduled for this event", http.StatusConflict)
+			return
+		}
 		http.Error(w, "create failed", http.StatusBadRequest)
 		return
 	}
@@ -470,11 +501,11 @@ type rosterEntry struct {
 }
 
 func (h *LeagueHandler) PutMatchRoster(w http.ResponseWriter, r *http.Request) {
-	pres, ok := h.requirePresident(w, r)
-	if !ok {
+	user, err := h.Me(r)
+	if err != nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
-	_ = pres
 	mid, err := strconv.ParseInt(chi.URLParam(r, "matchID"), 10, 64)
 	if err != nil || mid < 1 {
 		http.Error(w, "invalid match id", http.StatusBadRequest)
@@ -498,6 +529,12 @@ func (h *LeagueHandler) PutMatchRoster(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	seasonID, err := h.Store.GetSeasonIDForMatch(r.Context(), mid)
+	if err != nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+
 	var rows []rosterEntry
 	if err := json.NewDecoder(r.Body).Decode(&rows); err != nil {
 		http.Error(w, "invalid json", http.StatusBadRequest)
@@ -510,6 +547,18 @@ func (h *LeagueHandler) PutMatchRoster(w http.ResponseWriter, r *http.Request) {
 		}
 		if row.SlotPosition < 1 || row.SlotPosition > 3 {
 			http.Error(w, "invalid slot", http.StatusBadRequest)
+			return
+		}
+		if user.Role != "President" {
+			capOK, err := h.Store.PlayerIsCaptainOfTeam(r.Context(), seasonID, user.PlayerID, row.TeamID)
+			if err != nil || !capOK {
+				http.Error(w, "forbidden", http.StatusForbidden)
+				return
+			}
+		}
+		memOK, err := h.Store.PlayerAffiliatedWithTeam(r.Context(), seasonID, row.PlayerID, row.TeamID)
+		if err != nil || !memOK {
+			http.Error(w, "player not on team", http.StatusBadRequest)
 			return
 		}
 		if err := h.Store.UpsertMatchRoster(r.Context(), mid, row.TeamID, row.PlayerID, row.SlotPosition); err != nil {
