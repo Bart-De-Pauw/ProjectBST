@@ -37,6 +37,7 @@ function buildCrumbs(pathname: string): Crumb[] {
   if (pathname === "/health") return [{ label: "Admin", to: "/admin" }, { label: "API health" }];
   if (pathname === "/login") return [{ label: "Sign in" }];
   if (pathname === "/profile") return [{ label: "Profile" }];
+  if (pathname === "/about") return [{ label: "About" }];
 
   if (pathname === "/admin/players") return [{ label: "Admin", to: "/admin" }, { label: "Players" }];
   if (pathname === "/admin/teams") return [{ label: "Admin", to: "/admin" }, { label: "Teams" }];
@@ -137,6 +138,11 @@ export function AppLayout() {
                 ? "Not signed in"
                 : "Loading…"}
           </Typography>
+          {isMobile ? (
+            <Button color="inherit" size="small" component={Link} to="/about" sx={{ minWidth: 0, px: 1 }}>
+              About
+            </Button>
+          ) : null}
           {auth.status === "anonymous" ? (
             <Button color="inherit" size="small" component={Link} to="/login">
               Sign in
@@ -169,6 +175,7 @@ export function AppLayout() {
             ) : (
               <NavItem to="/login" label="Sign in" collapsed={collapsed} active={location.pathname === "/login"} />
             )}
+            <NavItem to="/about" label="About" collapsed={collapsed} active={location.pathname === "/about"} />
           </List>
         </Drawer>
       ) : null}

@@ -81,12 +81,26 @@ fi
 
 DC=(docker compose -f "${COMPOSE_FILE}")
 
+set_build_metadata_env() {
+  if [[ -z "${GIT_COMMIT:-}" ]]; then
+    if GIT_COMMIT="$(git -C "${REPO_ROOT}" rev-parse --short HEAD 2>/dev/null)"; then
+      export GIT_COMMIT
+    else
+      export GIT_COMMIT=dev
+    fi
+  fi
+  if [[ -z "${BUILD_TIME:-}" ]]; then
+    export BUILD_TIME="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+  fi
+}
+
 case "${ACTION}" in
   start)
     extra=()
     for a in "$@"; do
       if [[ "${a}" == "--build" ]]; then
         extra+=(--build)
+        set_build_metadata_env
       else
         echo "error: unknown start flag: ${a} (only --build is supported)" >&2
         exit 1

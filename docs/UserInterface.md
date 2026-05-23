@@ -73,6 +73,13 @@ Admin is not a public tab; presidents use the desktop sidebar or `/admin`.
 | `/admin/teams` | President | Teams |
 | `/login` | Anonymous | Sign in |
 | `/profile` | Authenticated | Email preferences |
+| `/about` | Public | App info + web/API build metadata (#14) |
+
+### About page (`/about`)
+
+- Public; linked from sidebar (desktop) and app bar (mobile).
+- Shows environment badge (`dev` / `prod`), web commit + UTC build time, API commit + UTC build time (from `GET /public/version`).
+- Build metadata injected at Docker build (`GIT_COMMIT`, `BUILD_TIME`); see `scripts/docker-stack.* start --build`.
 
 ## Layout notes
 

@@ -16,6 +16,10 @@ services:
   api:
     build:
       context: ../api
+      args:
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
+        BUILD_TIME: ${BUILD_TIME:-}
+        APP_ENV: prod
     environment:
       PORT: "8080"
       DATABASE_URL: postgres://bowling:bowling@db:5432/bowling?sslmode=disable
@@ -29,6 +33,10 @@ services:
     build:
       context: ../web
       dockerfile: Dockerfile.prod
+      args:
+        VITE_GIT_COMMIT: ${GIT_COMMIT:-unknown}
+        VITE_BUILD_TIME: ${BUILD_TIME:-}
+        VITE_APP_ENV: prod
     depends_on:
       - api
     ports:
