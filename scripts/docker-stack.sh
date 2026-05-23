@@ -25,7 +25,7 @@ Stacks:
 Commands:
   start [--build]     Bring stack up (-d). Pass --build to rebuild images.
   stop                docker compose down
-  ps                  docker compose ps -a
+  ps, status          docker compose ps -a
   logs [args...]      docker compose logs (e.g. -f, --tail=100, service names)
 
 Examples:
@@ -101,14 +101,14 @@ case "${ACTION}" in
     fi
     exec "${DC[@]}" down
     ;;
-  ps)
+  ps|status)
     exec "${DC[@]}" ps -a
     ;;
   logs)
     exec "${DC[@]}" logs "$@"
     ;;
   *)
-    echo "error: unknown command: ${ACTION} (use start|stop|ps|logs)" >&2
+    echo "error: unknown command: ${ACTION} (use start|stop|ps|status|logs)" >&2
     exit 1
     ;;
 esac

@@ -58,7 +58,7 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned   # once, if scripts are blo
 .\scripts\docker-stack.ps1 prod stop
 ```
 
-Stacks: `dev` → `infra/docker-compose.dev.yml`, `prod` → `infra/docker-compose.yml`. Commands: `start [--build]`, `stop`, `ps`, `logs` (pass through any `docker compose logs` flags, e.g. `-f`, `--tail=100`, service names). Override DB credentials the same way as plain `docker compose` (environment / `.env`), not via committed secrets.
+Stacks: `dev` → `infra/docker-compose.dev.yml`, `prod` → `infra/docker-compose.yml`. Commands: `start [--build]`, `stop`, `ps` / `status`, `logs` (pass through any `docker compose logs` flags, e.g. `-f`, `--tail=100`, service names). Override DB credentials the same way as plain `docker compose` (environment / `.env`), not via committed secrets.
 
 After first DB init, a default **President** account exists (from migration `0002_seed_president.sql`):
 
