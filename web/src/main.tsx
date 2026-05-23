@@ -1,10 +1,11 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { Alert, CssBaseline, ThemeProvider, createTheme, Typography } from "@mui/material";
+import { Alert, CssBaseline, ThemeProvider, Typography } from "@mui/material";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Link, Route, Routes, useLocation } from "react-router-dom";
+import { BrowserRouter, Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "./auth/AuthContext";
 import { AppLayout } from "./AppLayout";
+import { RequirePresident } from "./components/RequirePresident";
 import { LoginPage } from "./pages/LoginPage";
 import { PlayersAdminPage } from "./pages/PlayersAdminPage";
 import { TeamsAdminPage } from "./pages/TeamsAdminPage";
@@ -14,8 +15,12 @@ import { SeasonDetailPage } from "./pages/SeasonDetailPage";
 import { EventAdminPage } from "./pages/EventAdminPage";
 import { LeaderboardsPage } from "./pages/LeaderboardsPage";
 import { LiveEventPage } from "./pages/LiveEventPage";
+import { LiveScoresHubPage } from "./pages/LiveScoresHubPage";
+import { LeaderboardsHubPage } from "./pages/LeaderboardsHubPage";
+import { ScorecardHubPage } from "./pages/ScorecardHubPage";
+import { AdminHubPage } from "./pages/AdminHubPage";
+import { modernTheme } from "./theme/modernTheme";
 
-const theme = createTheme({ palette: { mode: "dark" } });
 const queryClient = new QueryClient();
 
 class RouteErrorBoundary extends React.Component<{ children: React.ReactNode }, { error: Error | null }> {
@@ -39,7 +44,7 @@ class RouteErrorBoundary extends React.Component<{ children: React.ReactNode }, 
             </Typography>
           </Alert>
           <Typography sx={{ mt: 2 }}>
-            <Link to="/">Home</Link>
+            <Link to="/live">Live scores</Link>
           </Typography>
         </div>
       );
@@ -67,27 +72,25 @@ function Home() {
       </Typography>
       <ul>
         <li>
+          <Link to="/live">Live scores</Link>
+        </li>
+        <li>
+          <Link to="/leaderboards">Season standings</Link>
+        </li>
+        <li>
+          <Link to="/scorecard">Scorecard input</Link>
+        </li>
+        <li>
+          <Link to="/admin">Admin</Link>
+        </li>
+        <li>
           <Link to="/health">API health</Link>
         </li>
         <li>
           <Link to="/login">Sign in</Link>
         </li>
         <li>
-          <Typography variant="body2" color="text.secondary" component="span">
-            Live event: use <code>/events/&#123;eventId&#125;/live</code> (no login)
-          </Typography>
-        </li>
-        <li>
           <Link to="/profile">Profile / email</Link>
-        </li>
-        <li>
-          <Link to="/admin/players">Players (President)</Link>
-        </li>
-        <li>
-          <Link to="/admin/teams">Teams (President)</Link>
-        </li>
-        <li>
-          <Link to="/admin/seasons">Seasons & events (President)</Link>
         </li>
         {auth.status === "authenticated" ? (
           <li>
@@ -112,7 +115,7 @@ function Health() {
         Open <a href="/api/healthz">/api/healthz</a>.
       </p>
       <p>
-        <Link to="/">Back</Link>
+        <Link to="/admin">Back to admin</Link>
       </p>
     </div>
   );
@@ -121,24 +124,33 @@ function Health() {
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider theme={theme}>
+      <ThemeProvider theme={modernTheme}>
         <CssBaseline />
         <BrowserRouter>
           <AuthProvider>
             <RoutedErrorBoundary>
               <Routes>
                 <Route element={<AppLayout />}>
-                  <Route path="/" element={<Home />} />
+                  <Route path="/" element={<Navigate to="/live" replace />} />
+                  <Route path="/live" element={<LiveScoresHubPage />} />
+                  <Route path="/leaderboards" element={<LeaderboardsHubPage />} />
+                  <Route path="/scorecard" element={<ScorecardHubPage />} />
                   <Route path="/health" element={<Health />} />
                   <Route path="/login" element={<LoginPage />} />
                   <Route path="/profile" element={<ProfilePage />} />
-                  <Route path="/admin/players" element={<PlayersAdminPage />} />
-                  <Route path="/admin/teams" element={<TeamsAdminPage />} />
-                  <Route path="/admin/seasons" element={<SeasonsAdminPage />} />
-                  <Route path="/admin/seasons/:seasonId" element={<SeasonDetailPage />} />
-                  <Route path="/admin/events/:eventId" element={<EventAdminPage />} />
                   <Route path="/events/:eventId/live" element={<LiveEventPage />} />
                   <Route path="/seasons/:seasonId/leaderboards" element={<LeaderboardsPage />} />
+                  <Route path="/home" element={<Home />} />
+
+                  <Route element={<RequirePresident />}>
+                    <Route path="/admin" element={<AdminHubPage />} />
+                    <Route path="/admin/players" element={<PlayersAdminPage />} />
+                    <Route path="/admin/teams" element={<TeamsAdminPage />} />
+                    <Route path="/admin/seasons" element={<SeasonsAdminPage />} />
+                    <Route path="/admin/seasons/:seasonId" element={<SeasonDetailPage />} />
+                  </Route>
+
+                  <Route path="/admin/events/:eventId" element={<EventAdminPage />} />
                 </Route>
               </Routes>
             </RoutedErrorBoundary>
@@ -148,4 +160,3 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     </QueryClientProvider>
   </React.StrictMode>,
 );
-

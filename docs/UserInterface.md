@@ -1,40 +1,89 @@
-This final input resolves the dependency regarding the core visual identity, and I can confidently tell you: **Yes, this is an excellent, functional, and sophisticated color scheme for a high-stakes application.**
+# User interface blueprint
 
-It adheres perfectly to modern UI principles because it uses the colors not as decorations, but as **functional signposts**.
+Reference for the Bowling Competition Manager UI: information architecture, Modern theme tokens, and screen map. Scoring rules and API behavior live in [architecture.md](./architecture.md).
 
-Here is my comprehensive analysis of why this palette works and how we will implement it into your final design blueprint:
+## Goals
 
-### 🏆 Expert Analysis of the Color Scheme
+- **Speed:** scoring input and live viewing should be low-friction on competition nights.
+- **Clarity:** generous spacing; status colors show saved vs draft vs missing data.
+- **Roles:** public leaderboards and live view; captains enter scorecards; presidents manage league setup.
 
-| Role | Hex Code / Color | Function in UI | Why It Works (UX Principle) |
-| :--- | :--- | :--- | :--- |
-| **Dominant (60%)** | `#ffffff` (White) | Background, Container spacing, Text background. | **Clarity & Breathability:** Maximizes white space, reduces visual noise, and keeps the focus on the data itself (the scores/rankings). This is critical for high-stress environments like competition days. |
-| **Secondary (30%)** | `#f27272` (Salmon Red) | Section backgrounds, Borders, Dividers, Active state containers (e.g., the card holding a team's total score). | **Structure & Grouping:** It provides enough contrast against the white background to segment information and define boundaries without being overwhelming or alarming. It builds hierarchy. |
-| **Accent (10%)** | `#f7d865` (Mustard Yellow/Gold) | Call-to-Action Buttons, Active Tab Indicators, Rank #1 Highlight, Key data points (e.g., the current bowler's name). | **Focus & Conversion:** This is your *power color*. It must be used sparingly, only for elements that require immediate user attention or signal success/completion. It guides the eye instantly. |
+## Modern theme (default)
 
----
-### 🗺️ Final Design Blueprint Summary (The Shared Understanding)
+| Token | Hex | MUI / usage |
+| :--- | :--- | :--- |
+| `dominant` | `#ffffff` | `palette.background.default`, `palette.background.paper`, page surfaces |
+| `secondary` | `#f27272` | `palette.secondary.main`, dividers, outlined borders, table headers |
+| `accent` | `#f7d865` | `palette.primary.main`, primary CTAs, active nav, rank #1 highlight |
+| `textPrimary` | `#1a1a1a` | `palette.text.primary` |
+| `textSecondary` | `#5c5c5c` | `palette.text.secondary` |
 
-We have successfully resolved all major design dependencies. Here is the resulting UI blueprint:
+Implementation: `web/src/theme/modernTheme.ts` exports `modernTheme`, `modernColors`, `rankRowSx`, and `fieldStatusSx`.
 
-**1. The Primary User Experience (UX):**
-*   **Focus:** Extreme simplicity and speed. Data entry and viewing scores must be instantaneous and low-friction.
-*   **Workflow Priority:** Scoring Input $\rightarrow$ Viewing Live Leaderboard.
-*   **Interaction Model:** PC for structured batch data input (scoring). Mobile for fast, vertical consumption of live results.
+**Status colors (score entry):**
 
-**2. The Information Architecture (IA):**
-*   **Primary Navigation:** Minimalist and clear: [Leaderboards] | [Scorecard Input] | [Admin/Settings].
-*   **Mobile Flow:** Tabbed navigation defaulting to **Live Scores**. A secondary tab for "Season Standings" handles the long-term data view.
-*   **Admin Flow:** Completely segregated under a dedicated, restricted 'Admin' area (requires high privilege).
+- Green background = saved on server
+- Yellow background = draft / unsaved edit
 
-**3. The Visual Implementation (UI):**
-*   **Visual Language:** Minimalist and clear. We will use generous white space to separate scores and rankings, ensuring the user never feels overwhelmed by data density.
-*   **Scoring Input:** Will use a large-field grid structure on PC, emphasizing status indicators (Green for 'Saved', Yellow warning for 'Draft').
-*   **Mobile View:** Must prioritize vertical scrolling speed and contrasting colors to make the top 3 ranks instantly visible without deep scrolling.
+**Leaderboard ranks:**
 
-**4. Theme Strategy:**
-*   The `#ffffff` background, `#f27272` secondary structure, and `#f7d865` accent are confirmed as the **Modern Theme's foundation.**
-*   When building the **Traditional Theme**, we will maintain the *structural roles* of the colors (e.g., the CTA button still gets the 10% color) but swap out the shades for darker, more classical tones (e.g., replacing `#f27272` with a deep forest green or navy blue).
+- Rank 1: strong accent background
+- Ranks 2–3: lighter accent background
 
----
-**CONCLUSION:** We have reached a shared understanding of the goals, constraints, and core visual elements needed to build this application successfully. The resulting UI will be professional, highly functional, stress-reducing for the user, and technically scalable across devices and themes.
+**Live vs official:**
+
+- Live views show: *Live / Unfinalized — standings and points may change until the president finalizes events.*
+- Official views use finalized event data only (see architecture.md).
+
+## Information architecture
+
+### Primary navigation (desktop sidebar)
+
+| Item | Who sees it | Route |
+| :--- | :--- | :--- |
+| Leaderboards | Everyone | `/leaderboards` → season standings |
+| Live scores | Everyone | `/live` → event live hub |
+| Scorecard | Captain, President | `/scorecard` → open events |
+| Admin | President only | `/admin/*` |
+
+### Mobile (< md)
+
+Bottom tabs (default tab: **Live scores**):
+
+1. Live scores → `/live`
+2. Season standings → `/leaderboards`
+3. Scorecard → `/scorecard` (captains/presidents only)
+
+Admin is not a public tab; presidents use the desktop sidebar or `/admin`.
+
+## Screen map
+
+| Route | Role | Primary action |
+| :--- | :--- | :--- |
+| `/live` | Public | Pick or resume a live event |
+| `/events/:eventId/live` | Public | Watch match progress + completeness (#5) |
+| `/leaderboards` | Public | Open season standings hub |
+| `/seasons/:seasonId/leaderboards` | Public | Official / live leaderboards (#6) |
+| `/scorecard` | Captain, President | List open events for score entry |
+| `/admin/events/:eventId` | Captain, President | Roster + scratch scores (#3, #4) |
+| `/admin` | President | Admin hub |
+| `/admin/seasons` | President | Seasons & schedule (#2) |
+| `/admin/seasons/:seasonId` | President | Teams, affiliations, events |
+| `/admin/players` | President | Player accounts |
+| `/admin/teams` | President | Teams |
+| `/login` | Anonymous | Sign in |
+| `/profile` | Authenticated | Email preferences |
+
+## Layout notes
+
+- **Desktop:** permanent sidebar; score entry uses a wide grid with large inputs.
+- **Mobile:** bottom tabs for consumption; score entry remains usable with horizontal scroll on the grid.
+- **Traditional theme:** deferred; keep structural color roles above when adding a second theme later.
+
+## Related issues
+
+- #2 Schedule / calendar UI
+- #3 Captain roster
+- #4 Captain score entry
+- #5 Live match view
+- #6 Leaderboards

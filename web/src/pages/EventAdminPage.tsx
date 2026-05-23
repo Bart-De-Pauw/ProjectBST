@@ -23,6 +23,7 @@ import { Link, useParams } from "react-router-dom";
 import { apiErrorText, apiFetch, jsonArray } from "../api/client";
 import type { Role } from "../auth/AuthContext";
 import { useAuth } from "../auth/AuthContext";
+import { fieldStatusSx } from "../theme/modernTheme";
 
 type MatchDTO = {
   matchId: number;
@@ -473,6 +474,9 @@ function MatchAccordion({
   const [rosterPick, setRosterPick] = useState<Record<string, string>>({}); // key: `${teamId}-${slot}` => playerId
   const [hdcpPick, setHdcpPick] = useState<Record<string, string>>({}); // key: `${teamId}-${slot}` => hdcp
   const [scratchPick, setScratchPick] = useState<Record<string, string>>({}); // key: `${teamId}-${slot}-${game}` => scratch
+  const [savedRosterPick, setSavedRosterPick] = useState<Record<string, string>>({});
+  const [savedHdcpPick, setSavedHdcpPick] = useState<Record<string, string>>({});
+  const [savedScratchPick, setSavedScratchPick] = useState<Record<string, string>>({});
   const [overrideOpen, setOverrideOpen] = useState<number | null>(null);
   const [overrideReason, setOverrideReason] = useState("");
 
@@ -482,6 +486,7 @@ function MatchAccordion({
       rp[`${row.teamId}-${row.slotPosition}`] = String(row.playerId);
     }
     setRosterPick(rp);
+    setSavedRosterPick(rp);
     const hp: Record<string, string> = {};
     const sp: Record<string, string> = {};
     for (const row of jsonArray(block.scores as unknown)) {
@@ -492,6 +497,8 @@ function MatchAccordion({
     }
     setHdcpPick(hp);
     setScratchPick(sp);
+    setSavedHdcpPick(hp);
+    setSavedScratchPick(sp);
   }, [block.match.matchId, reloadIx, block.roster, block.scores]);
 
   async function saveRoster() {
@@ -656,7 +663,17 @@ function MatchAccordion({
           ) : null}
 
           <Typography variant="subtitle2">{canEditScores ? "Roster + scores" : "Roster (slots 1–3)"}</Typography>
-          <Table size="small">
+          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+            Green = saved on server. Yellow = edited but not saved yet.
+          </Typography>
+          <Table
+            size="small"
+            sx={{
+              minWidth: 960,
+              "& .MuiTableCell-root": { py: 1.25, px: 1.25 },
+              "& .MuiInputBase-input": { fontSize: "1rem", py: 1 },
+            }}
+          >
             <TableHead>
               <TableRow>
                 <TableCell>Team</TableCell>
@@ -710,6 +727,7 @@ function MatchAccordion({
                             onChange={(e) =>
                               setRosterPick((prev) => ({ ...prev, [`${tid}-${slot}`]: e.target.value }))
                             }
+                            sx={fieldStatusSx(inputStatus(pid, savedRosterPick[`${tid}-${slot}`]))}
                           >
                             <MenuItem value="">
                               <em>—</em>
@@ -734,7 +752,7 @@ function MatchAccordion({
                               onChange={(e) =>
                                 setHdcpPick((prev) => ({ ...prev, [`${tid}-${slot}`]: e.target.value }))
                               }
-                              sx={{ width: 80 }}
+                              sx={{ width: 88, ...fieldStatusSx(inputStatus(hdStr, savedHdcpPick[`${tid}-${slot}`])) }}
                             />
                           </TableCell>
                           {([1, 2, 3] as const).map((game) => (
@@ -749,7 +767,12 @@ function MatchAccordion({
                                     [`${tid}-${slot}-${game}`]: e.target.value,
                                   }))
                                 }
-                                sx={{ width: 70 }}
+                                sx={{
+                                  width: 76,
+                                  ...fieldStatusSx(
+                                    inputStatus(scratchPick[`${tid}-${slot}-${game}`], savedScratchPick[`${tid}-${slot}-${game}`]),
+                                  ),
+                                }}
                               />
                             </TableCell>
                           ))}
@@ -915,4 +938,11 @@ function numOrNull(v: string | undefined): number | null {
   const n = Number(t);
   if (!Number.isFinite(n)) return null;
   return Math.min(300, Math.max(0, Math.round(n)));
+}
+
+function inputStatus(current: string | undefined, saved: string | undefined): "saved" | "draft" | "empty" {
+  const cur = String(current ?? "").trim();
+  if (!cur) return "empty";
+  const sav = saved !== undefined ? String(saved).trim() : "";
+  return cur === sav ? "saved" : "draft";
 }

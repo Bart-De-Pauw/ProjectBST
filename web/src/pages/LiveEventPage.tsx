@@ -15,6 +15,7 @@ import {
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { apiFetch, jsonArray } from "../api/client";
+import { rememberLiveEventId } from "./LiveScoresHubPage";
 
 type RosterRow = { teamId: number; playerId: number; slotPosition: number };
 type ScoreRow = {
@@ -127,6 +128,7 @@ export function LiveEventPage() {
       ...json,
       matches: normalizeMatches(json.matches),
     });
+    rememberLiveEventId(eventId);
     setErr(null);
     setRefreshIx((x) => x + 1);
   }, [eventId, validId]);
@@ -147,7 +149,7 @@ export function LiveEventPage() {
   if (!validId) {
     return (
       <Alert sx={{ m: 2 }}>
-        Invalid event id. <Link to="/">Home</Link>
+        Invalid event id. <Link to="/live">Live scores</Link>
       </Alert>
     );
   }
@@ -196,7 +198,7 @@ export function LiveEventPage() {
       )}
 
       <Typography variant="body2">
-        <Link to="/">Home</Link>
+        <Link to="/live">Live scores hub</Link>
       </Typography>
     </Stack>
   );

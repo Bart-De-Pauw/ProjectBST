@@ -1,5 +1,7 @@
 import {
   AppBar,
+  BottomNavigation,
+  BottomNavigationAction,
   Box,
   Breadcrumbs,
   Button,
@@ -11,58 +13,111 @@ import {
   ListItemText,
   Toolbar,
   Typography,
+  useMediaQuery,
+  useTheme,
 } from "@mui/material";
 import React, { useMemo, useState } from "react";
-import { Link, Outlet, useLocation } from "react-router-dom";
+import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "./auth/AuthContext";
 
 const drawerWidthOpen = 240;
 const drawerWidthClosed = 64;
+const mobileNavHeight = 56;
 
 type Crumb = { label: string; to?: string };
 
 function buildCrumbs(pathname: string): Crumb[] {
-  const crumbs: Crumb[] = [{ label: "Home", to: "/" }];
+  const crumbs: Crumb[] = [{ label: "Live scores", to: "/live" }];
 
-  if (pathname === "/") return crumbs;
-  if (pathname === "/health") return [...crumbs, { label: "API health" }];
-  if (pathname === "/login") return [...crumbs, { label: "Sign in" }];
-  if (pathname === "/profile") return [...crumbs, { label: "Profile" }];
-  if (pathname === "/admin/players") return [...crumbs, { label: "Admin" }, { label: "Players" }];
-  if (pathname === "/admin/teams") return [...crumbs, { label: "Admin" }, { label: "Teams" }];
-  if (pathname === "/admin/seasons") return [...crumbs, { label: "Admin" }, { label: "Seasons" }];
+  if (pathname === "/live") return crumbs;
+  if (pathname === "/leaderboards") return [{ label: "Standings", to: "/leaderboards" }];
+  if (pathname === "/scorecard") return [{ label: "Scorecard", to: "/scorecard" }];
+  if (pathname === "/admin") return [{ label: "Admin", to: "/admin" }];
+  if (pathname === "/") return [{ label: "Home", to: "/" }];
+  if (pathname === "/health") return [{ label: "Admin", to: "/admin" }, { label: "API health" }];
+  if (pathname === "/login") return [{ label: "Sign in" }];
+  if (pathname === "/profile") return [{ label: "Profile" }];
+
+  if (pathname === "/admin/players") return [{ label: "Admin", to: "/admin" }, { label: "Players" }];
+  if (pathname === "/admin/teams") return [{ label: "Admin", to: "/admin" }, { label: "Teams" }];
+  if (pathname === "/admin/seasons") return [{ label: "Admin", to: "/admin" }, { label: "Seasons" }];
 
   let m = pathname.match(/^\/admin\/seasons\/(\d+)$/);
-  if (m) return [...crumbs, { label: "Admin", to: "/admin/seasons" }, { label: "Season" }, { label: `#${m[1]}` }];
+  if (m) return [{ label: "Admin", to: "/admin" }, { label: "Season", to: "/admin/seasons" }, { label: `#${m[1]}` }];
 
   m = pathname.match(/^\/admin\/events\/(\d+)$/);
-  if (m) return [...crumbs, { label: "Admin", to: "/admin/seasons" }, { label: "Event" }, { label: `#${m[1]}` }];
+  if (m) return [{ label: "Scorecard", to: "/scorecard" }, { label: "Event" }, { label: `#${m[1]}` }];
 
   m = pathname.match(/^\/seasons\/(\d+)\/leaderboards$/);
-  if (m) return [...crumbs, { label: "Season" }, { label: `#${m[1]}` }, { label: "Leaderboards" }];
+  if (m) return [{ label: "Standings", to: "/leaderboards" }, { label: `Season #${m[1]}` }];
 
   m = pathname.match(/^\/events\/(\d+)\/live$/);
-  if (m) return [...crumbs, { label: "Live event" }, { label: `#${m[1]}` }];
+  if (m) return [{ label: "Live scores", to: "/live" }, { label: `Event #${m[1]}` }];
 
-  return [...crumbs, { label: pathname }];
+  return [{ label: pathname }];
+}
+
+type NavItemDef = { to: string; label: string; match: (path: string) => boolean };
+
+function primaryNavItems(showScorecard: boolean, showAdmin: boolean): NavItemDef[] {
+  const items: NavItemDef[] = [
+    { to: "/leaderboards", label: "Leaderboards", match: (p) => p.startsWith("/leaderboards") || p.includes("/leaderboards") },
+    { to: "/live", label: "Live scores", match: (p) => p === "/live" || /^\/events\/\d+\/live$/.test(p) },
+  ];
+  if (showScorecard) {
+    items.push({
+      to: "/scorecard",
+      label: "Scorecard",
+      match: (p) => p === "/scorecard" || /^\/admin\/events\/\d+$/.test(p),
+    });
+  }
+  if (showAdmin) {
+    items.push({ to: "/admin", label: "Admin", match: (p) => p.startsWith("/admin") });
+  }
+  return items;
 }
 
 export function AppLayout() {
   const auth = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const [collapsed, setCollapsed] = useState(false);
+
+  const authed = auth.status === "authenticated";
+  const isPresident = authed && auth.me.role === "President";
+  const isCaptain = authed && auth.me.role === "Captain";
+  const showScorecard = isPresident || isCaptain;
+  const showAdmin = isPresident;
+
+  const navItems = useMemo(
+    () => primaryNavItems(showScorecard, showAdmin),
+    [showScorecard, showAdmin],
+  );
 
   const crumbs = useMemo(() => buildCrumbs(location.pathname), [location.pathname]);
   const drawerWidth = collapsed ? drawerWidthClosed : drawerWidthOpen;
+
+  const mobileTab = useMemo(() => {
+    if (location.pathname === "/live" || /^\/events\/\d+\/live$/.test(location.pathname)) return "/live";
+    if (location.pathname.startsWith("/leaderboards") || location.pathname.includes("/leaderboards")) return "/leaderboards";
+    return "/live";
+  }, [location.pathname]);
 
   return (
     <Box sx={{ display: "flex", minHeight: "100vh" }}>
       <AppBar position="fixed" sx={{ zIndex: (t) => t.zIndex.drawer + 1 }}>
         <Toolbar sx={{ gap: 2 }}>
-          <Button color="inherit" variant="outlined" size="small" onClick={() => setCollapsed((v) => !v)}>
-            {collapsed ? "»" : "«"}
-          </Button>
-          <Breadcrumbs aria-label="breadcrumb" sx={{ flex: 1 }}>
+          {!isMobile ? (
+            <Button color="inherit" variant="outlined" size="small" onClick={() => setCollapsed((v) => !v)}>
+              {collapsed ? "»" : "«"}
+            </Button>
+          ) : null}
+          <Typography variant="h6" component={Link} to="/live" sx={{ color: "inherit", textDecoration: "none", fontWeight: 700 }}>
+            BST Bowling
+          </Typography>
+          <Breadcrumbs aria-label="breadcrumb" sx={{ flex: 1, display: { xs: "none", sm: "flex" } }}>
             {crumbs.map((c, i) =>
               c.to ? (
                 <MuiLink key={`${c.label}-${i}`} component={Link} to={c.to} underline="hover" color="inherit">
@@ -75,52 +130,99 @@ export function AppLayout() {
               ),
             )}
           </Breadcrumbs>
-          <Typography variant="body2" color="inherit" sx={{ opacity: 0.9 }}>
-            {auth.status === "authenticated" ? `${auth.me.username} (${auth.me.role})` : auth.status === "anonymous" ? "Not signed in" : "Loading…"}
+          <Typography variant="body2" color="inherit" sx={{ opacity: 0.9, display: { xs: "none", md: "block" } }}>
+            {auth.status === "authenticated"
+              ? `${auth.me.username} (${auth.me.role})`
+              : auth.status === "anonymous"
+                ? "Not signed in"
+                : "Loading…"}
           </Typography>
+          {auth.status === "anonymous" ? (
+            <Button color="inherit" size="small" component={Link} to="/login">
+              Sign in
+            </Button>
+          ) : auth.status === "authenticated" ? (
+            <Button color="inherit" size="small" component={Link} to="/profile">
+              Profile
+            </Button>
+          ) : null}
         </Toolbar>
       </AppBar>
 
-      <Drawer
-        variant="permanent"
+      {!isMobile ? (
+        <Drawer
+          variant="permanent"
+          sx={{
+            width: drawerWidth,
+            flexShrink: 0,
+            [`& .MuiDrawer-paper`]: { width: drawerWidth, boxSizing: "border-box" },
+          }}
+        >
+          <Toolbar />
+          <List dense>
+            {navItems.map((item) => (
+              <NavItem key={item.to} to={item.to} label={item.label} collapsed={collapsed} active={item.match(location.pathname)} />
+            ))}
+            <Divider sx={{ my: 1 }} />
+            {authed ? (
+              <NavItem to="/profile" label="Profile" collapsed={collapsed} active={location.pathname === "/profile"} />
+            ) : (
+              <NavItem to="/login" label="Sign in" collapsed={collapsed} active={location.pathname === "/login"} />
+            )}
+          </List>
+        </Drawer>
+      ) : null}
+
+      <Box
+        component="main"
         sx={{
-          width: drawerWidth,
-          flexShrink: 0,
-          [`& .MuiDrawer-paper`]: { width: drawerWidth, boxSizing: "border-box" },
+          flex: 1,
+          p: 2,
+          pt: 10,
+          pb: isMobile ? `${mobileNavHeight + 16}px` : 2,
+          bgcolor: "background.default",
         }}
       >
-        <Toolbar />
-        <List dense>
-          <NavItem to="/" label="Home" collapsed={collapsed} />
-          <NavItem to="/health" label="API health" collapsed={collapsed} />
-          <Typography variant="caption" sx={{ px: 2, py: 1, opacity: 0.7 }} display={collapsed ? "none" : "block"}>
-            Public live: /events/:id/live
-          </Typography>
-          <NavItem to="/profile" label="Profile" collapsed={collapsed} />
-          <NavItem to="/login" label="Sign in" collapsed={collapsed} />
-          <Divider sx={{ my: 1 }} />
-          <NavItem to="/admin/players" label="Admin: Players" collapsed={collapsed} />
-          <NavItem to="/admin/teams" label="Admin: Teams" collapsed={collapsed} />
-          <NavItem to="/admin/seasons" label="Admin: Seasons" collapsed={collapsed} />
-        </List>
-      </Drawer>
-
-      <Box component="main" sx={{ flex: 1, p: 2, pt: 10 }}>
         <Outlet />
       </Box>
+
+      {isMobile ? (
+        <BottomNavigation
+          value={mobileTab}
+          onChange={(_, value: string) => navigate(value)}
+          showLabels
+          sx={{
+            position: "fixed",
+            bottom: 0,
+            left: 0,
+            right: 0,
+            zIndex: (t) => t.zIndex.drawer + 1,
+            height: mobileNavHeight,
+          }}
+        >
+          <BottomNavigationAction label="Live scores" value="/live" />
+          <BottomNavigationAction label="Standings" value="/leaderboards" />
+          {showScorecard ? <BottomNavigationAction label="Scorecard" value="/scorecard" /> : null}
+        </BottomNavigation>
+      ) : null}
     </Box>
   );
 }
 
-function NavItem({ to, label, collapsed }: { to: string; label: string; collapsed: boolean }) {
+function NavItem({
+  to,
+  label,
+  collapsed,
+  active,
+}: {
+  to: string;
+  label: string;
+  collapsed: boolean;
+  active: boolean;
+}) {
   return (
-    <ListItemButton component={Link} to={to} sx={{ px: collapsed ? 1 : 2 }}>
-      <ListItemText
-        primary={collapsed ? label.slice(0, 1) : label}
-        secondary={collapsed ? undefined : undefined}
-        primaryTypographyProps={{ noWrap: true }}
-      />
+    <ListItemButton component={Link} to={to} selected={active} sx={{ px: collapsed ? 1 : 2 }}>
+      <ListItemText primary={collapsed ? label.slice(0, 1) : label} primaryTypographyProps={{ noWrap: true, fontWeight: active ? 600 : 400 }} />
     </ListItemButton>
   );
 }
-
