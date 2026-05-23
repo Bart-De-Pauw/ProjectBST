@@ -132,6 +132,7 @@ func main() {
 	})
 
 	r.Route("/public", func(r chi.Router) {
+		r.Get("/version", httpapi.BuildVersion)
 		r.Get("/events/{eventID}/live", leagueHandler.LiveEvent)
 		r.Get("/seasons/{seasonID}/leaderboards", leagueHandler.PublicSeasonLeaderboards)
 	})

@@ -18,6 +18,7 @@ import { LiveEventPage } from "./pages/LiveEventPage";
 import { LiveScoresHubPage } from "./pages/LiveScoresHubPage";
 import { LeaderboardsHubPage } from "./pages/LeaderboardsHubPage";
 import { ScorecardHubPage } from "./pages/ScorecardHubPage";
+import { AboutPage } from "./pages/AboutPage";
 import { AdminHubPage } from "./pages/AdminHubPage";
 import { modernTheme } from "./theme/modernTheme";
 
@@ -138,6 +139,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
                   <Route path="/health" element={<Health />} />
                   <Route path="/login" element={<LoginPage />} />
                   <Route path="/profile" element={<ProfilePage />} />
+                  <Route path="/about" element={<AboutPage />} />
                   <Route path="/events/:eventId/live" element={<LiveEventPage />} />
                   <Route path="/seasons/:seasonId/leaderboards" element={<LeaderboardsPage />} />
                   <Route path="/home" element={<Home />} />

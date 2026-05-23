@@ -14,6 +14,10 @@ services:
   api:
     build:
       context: ../api
+      args:
+        GIT_COMMIT: ${GIT_COMMIT:-dev}
+        BUILD_TIME: ${BUILD_TIME:-}
+        APP_ENV: dev
     environment:
       PORT: "8080"
       DATABASE_URL: postgres://bowling:bowling@db:5432/bowling?sslmode=disable
@@ -25,8 +29,15 @@ services:
   web:
     build:
       context: ../web
+      args:
+        VITE_GIT_COMMIT: ${GIT_COMMIT:-dev}
+        VITE_BUILD_TIME: ${BUILD_TIME:-}
+        VITE_APP_ENV: dev
     environment:
       VITE_DEV_API_PROXY: http://api:8080
+      VITE_GIT_COMMIT: ${GIT_COMMIT:-dev}
+      VITE_BUILD_TIME: ${BUILD_TIME:-}
+      VITE_APP_ENV: dev
     depends_on:
       - api
     ports:

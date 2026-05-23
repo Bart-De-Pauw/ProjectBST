@@ -77,7 +77,7 @@ Change this password immediately in any real deployment.
 - Teams/players directory (read): `GET /teams`, `GET /players` (any signed-in user; create/update remains President-only)
 - Matches: `POST|GET /events/{eventId}/matches`, `PUT /matches/{matchId}/roster`, `POST /matches/{matchId}/scores`, `POST /matches/{matchId}/approve`, `POST /matches/{matchId}/approve/override`
 - Finalize: `POST /events/{eventId}/finalize`, `POST /events/{eventId}/reopen`
-- Public: `GET /public/events/{eventId}/live`, `GET /public/seasons/{seasonId}/leaderboards?mode=official|live`
+- Public: `GET /public/events/{eventId}/live`, `GET /public/seasons/{seasonId}/leaderboards?mode=official|live`, `GET /public/version` (build metadata JSON)
 - Email stub: `POST /events/{eventId}/send-digest` (returns JSON placeholder until Gmail API is wired)
 
 ### Development (local tools)

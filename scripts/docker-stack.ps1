@@ -53,6 +53,22 @@ function Fail([string]$msg) {
   exit 1
 }
 
+function Set-BuildMetadataEnv {
+  if (-not $env:GIT_COMMIT) {
+    try {
+      $env:GIT_COMMIT = (git.exe -C $RepoRoot rev-parse --short HEAD 2>$null).Trim()
+    } catch {
+      $env:GIT_COMMIT = "dev"
+    }
+    if ([string]::IsNullOrWhiteSpace($env:GIT_COMMIT)) {
+      $env:GIT_COMMIT = "dev"
+    }
+  }
+  if (-not $env:BUILD_TIME) {
+    $env:BUILD_TIME = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+  }
+}
+
 if ($Stack -in @("-h", "--help", "help") -and [string]::IsNullOrEmpty($Action)) {
   Show-Help
   exit 0
@@ -110,6 +126,7 @@ switch ($Action) {
       else { Fail "unknown start flag: $a (only --build is supported)" }
     }
     if ($build) {
+      Set-BuildMetadataEnv
       docker compose -f $composeFile up -d --build
     } else {
       docker compose -f $composeFile up -d
